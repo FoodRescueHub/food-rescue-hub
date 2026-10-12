@@ -7,7 +7,7 @@ const authRoutes = require("./routes/auth");
 const protectedRoutes = require("./routes/protected"); // NEW
 const donationRoutes = require("./routes/donations");
 const claimRoutes = require("./routes/claims");
-
+const needRoutes = require("./routes/needs");
 const app = express();
 
 app.use(express.json());
@@ -20,7 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api", protectedRoutes); // NEW
 app.use("/api/donations", donationRoutes);
 app.use("/api/claims", claimRoutes);
-
+app.use("/api/needs", needRoutes);
 app.get("/", (req, res) => {
   res.json({ message: "Community Food Rescue backend is running!" });
 });
