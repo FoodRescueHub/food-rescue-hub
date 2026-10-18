@@ -15,92 +15,61 @@ select {
   font: inherit;
 }
 
-.app {
-  min-height: 100vh;
-}
-
-.header {
-  background: #176b4d;
-  color: white;
-  padding: 22px 7%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.header h1 {
-  margin: 0;
-  font-size: 27px;
-}
-
-.header p {
-  margin: 7px 0 0;
-  color: #d9eee3;
-}
-
-.role {
-  background: #ffffff26;
-  padding: 9px 15px;
-  border-radius: 20px;
-  font-size: 14px;
+button {
+  cursor: pointer;
 }
 
 .container {
-  width: min(1050px, 90%);
+  width: min(1050px, 92%);
   margin: 32px auto;
+  padding-bottom: 40px;
 }
 
-.welcome {
-  margin-bottom: 25px;
+/* ==================== HEADINGS ==================== */
+
+h1 {
+  margin: 0 0 18px;
+  color: #176b4d;
+  font-size: 30px;
 }
 
-.welcome h2 {
-  margin-bottom: 8px;
-  font-size: 28px;
+h2 {
+  margin: 28px 0 16px;
+  color: #24352d;
+  font-size: 22px;
 }
 
-.welcome p {
-  color: #65736b;
-  line-height: 1.6;
+h3 {
+  margin: 0 0 12px;
+  color: #176b4d;
+  font-size: 20px;
 }
 
-.panel {
-  background: white;
-  padding: 25px;
-  margin-bottom: 25px;
-  border-radius: 12px;
-  box-shadow: 0 3px 15px #183c2910;
-  border: 1px solid #e5ece7;
+p {
+  line-height: 1.5;
 }
 
-.panel h2 {
-  margin-top: 0;
-  margin-bottom: 22px;
-  font-size: 21px;
+/* ==================== LOGIN ==================== */
+
+.container > form {
+  max-width: 520px;
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+.container > form input,
+.container > form select {
+  margin-bottom: 12px;
 }
 
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-}
+/* ==================== INPUTS ==================== */
 
 input,
 select {
   width: 100%;
-  padding: 12px;
+  padding: 12px 13px;
+  margin-bottom: 12px;
   border: 1px solid #d4ded7;
-  border-radius: 7px;
-  background: white;
+  border-radius: 8px;
+  background: #ffffff;
   color: #24352d;
   outline: none;
 }
@@ -111,131 +80,147 @@ select:focus {
   box-shadow: 0 0 0 3px #24835e18;
 }
 
-.allergen-field {
-  margin-top: 20px;
+input::placeholder {
+  color: #8a968f;
 }
 
-.primary-btn {
-  margin-top: 22px;
-  padding: 13px 20px;
+label {
+  display: block;
+  margin: 8px 0 7px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #46564d;
+}
+
+/* ==================== BUTTONS ==================== */
+
+button {
+  padding: 11px 17px;
   border: none;
-  border-radius: 7px;
+  border-radius: 8px;
   background: #176b4d;
   color: white;
   font-weight: 600;
-  cursor: pointer;
+  transition: 0.2s ease;
 }
 
-.primary-btn:hover {
+button:hover {
   background: #10563d;
+  transform: translateY(-1px);
 }
 
-.section-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+button:active {
+  transform: translateY(0);
 }
 
-.section-heading span {
-  color: #65736b;
-  font-size: 14px;
+/* ==================== HR ==================== */
+
+hr {
+  margin: 32px 0;
+  border: 0;
+  border-top: 1px solid #dfe8e2;
 }
 
-.empty {
-  padding: 25px 10px;
-  text-align: center;
-  color: #78857d;
-  background: #f8faf8;
-  border-radius: 8px;
-}
+/* ==================== CARDS ==================== */
 
-.needs-list {
-  display: grid;
-  gap: 16px;
-}
-
-.need-card {
+.card {
+  margin: 16px 0;
   padding: 20px;
-  border: 1px solid #e0e9e2;
-  border-radius: 9px;
-  background: #fcfdfc;
+  background: #ffffff;
+  border: 1px solid #e1e9e3;
+  border-radius: 12px;
+  box-shadow: 0 3px 14px #183c2910;
 }
 
-.need-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+.card:hover {
+  box-shadow: 0 5px 18px #183c2918;
 }
 
-.need-top h3 {
-  margin: 0 0 12px;
-  font-size: 19px;
-}
-
-.need-card p {
-  color: #5c6a61;
+.card p {
+  margin: 8px 0;
+  color: #59675f;
   font-size: 14px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
 }
 
-.need-card strong {
-  color: #34483b;
+.card p strong {
+  color: #24352d;
 }
 
-.status {
-  padding: 6px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 700;
-  background: #e1f4e7;
-  color: #176b4d;
+/* ==================== DASHBOARD SECTIONS ==================== */
+
+.container > h2 {
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e1ebe4;
 }
 
-.status.cancelled {
-  background: #fde8e7;
-  color: #b42318;
+/* ==================== STATUS TEXT ==================== */
+
+.card p:nth-of-type(3) {
+  font-weight: 600;
 }
 
-.cancel-btn {
+/* ==================== RESERVATION BUTTONS ==================== */
+
+.card button {
+  margin-top: 10px;
+  margin-right: 8px;
+}
+
+/* ==================== FORM SPACING ==================== */
+
+form {
+  background: #ffffff;
+  padding: 22px;
+  border: 1px solid #e1e9e3;
+  border-radius: 12px;
+  box-shadow: 0 3px 14px #183c2910;
+  max-width: 700px;
+}
+
+form button {
   margin-top: 8px;
-  padding: 10px 14px;
-  border: 1px solid #d92d20;
-  border-radius: 6px;
-  background: white;
-  color: #b42318;
-  cursor: pointer;
 }
 
-.cancel-btn:hover {
-  background: #fff1f0;
+/* ==================== LOGIN PAGE ==================== */
+
+.container > h1:first-child {
+  margin-top: 40px;
 }
+
+.container > button {
+  margin-top: 10px;
+}
+
+/* ==================== MOBILE ==================== */
 
 @media (max-width: 600px) {
-  .header {
-    padding: 20px 5%;
-  }
-
-  .header h1 {
-    font-size: 22px;
-  }
-
   .container {
     width: 92%;
     margin: 22px auto;
   }
 
-  .panel {
-    padding: 18px;
+  h1 {
+    font-size: 25px;
   }
 
-  .form-grid {
-    grid-template-columns: 1fr;
+  h2 {
+    font-size: 20px;
   }
 
-  .need-top {
-    align-items: flex-start;
+  form {
+    padding: 17px;
+  }
+
+  .card {
+    padding: 17px;
+  }
+
+  button {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .card button {
+    margin-right: 0;
   }
 }

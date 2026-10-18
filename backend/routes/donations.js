@@ -1,4 +1,3 @@
-
 const express = require("express");
 const Donation = require("../models/Donation");
 const authenticateToken = require("../middleware/authMiddleware");
@@ -23,14 +22,19 @@ router.post(
       } = req.body;
 
       if (
-        typeof foodName !== "string" || !foodName.trim() ||
-        !Number.isFinite(quantity) || quantity < 1 ||
-        typeof unit !== "string" || !unit.trim() ||
-        typeof pickupAddress !== "string" || !pickupAddress.trim() ||
+        typeof foodName !== "string" ||
+        !foodName.trim() ||
+        !Number.isFinite(quantity) ||
+        quantity < 1 ||
+        typeof unit !== "string" ||
+        !unit.trim() ||
+        typeof pickupAddress !== "string" ||
+        !pickupAddress.trim() ||
         !expiryDate
       ) {
         return res.status(400).json({
-          message: "Please provide valid food, quantity, unit, pickup address and expiry date."
+          message:
+            "Please provide valid food, quantity, unit, pickup address and expiry date."
         });
       }
 
@@ -50,7 +54,9 @@ router.post(
         quantity,
         unit: unit.trim(),
         description:
-          typeof description === "string" ? description.trim() : "",
+          typeof description === "string"
+            ? description.trim()
+            : "",
         pickupAddress: pickupAddress.trim(),
         expiryDate: parsedExpiry,
         donor: req.user.id
@@ -61,7 +67,11 @@ router.post(
         donation
       });
     } catch (error) {
-      console.error("Create donation error:", error.message);
+      console.error(
+        "Create donation error:",
+        error.message
+      );
+
       return res.status(500).json({
         message: "Unable to create donation"
       });
@@ -87,7 +97,11 @@ router.get(
         donations
       });
     } catch (error) {
-      console.error("List donations error:", error.message);
+      console.error(
+        "List donations error:",
+        error.message
+      );
+
       return res.status(500).json({
         message: "Unable to retrieve donations"
       });
@@ -111,7 +125,11 @@ router.get(
         donations
       });
     } catch (error) {
-      console.error("My donations error:", error.message);
+      console.error(
+        "My donations error:",
+        error.message
+      );
+
       return res.status(500).json({
         message: "Unable to retrieve your donations"
       });
@@ -139,11 +157,13 @@ router.patch(
 
       if (donation.status !== "AVAILABLE") {
         return res.status(400).json({
-          message: "Only available donations can be cancelled"
+          message:
+            "Only available donations can be cancelled"
         });
       }
 
       donation.status = "CANCELLED";
+
       await donation.save();
 
       return res.status(200).json({
@@ -157,7 +177,11 @@ router.patch(
         });
       }
 
-      console.error("Cancel donation error:", error.message);
+      console.error(
+        "Cancel donation error:",
+        error.message
+      );
+
       return res.status(500).json({
         message: "Unable to cancel donation"
       });
