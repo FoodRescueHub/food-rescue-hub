@@ -1,19 +1,29 @@
-
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { z } = require("zod");
-const User = require("../models/User");
 
-const router = express.Router();
+const User = require("../models/User");
 const TokenBlacklist = require("../models/TokenBlacklist");
 const authenticateToken = require("../middleware/authMiddleware");
+
+const router = express.Router();
+
+// ==================== VALIDATION ====================
+
 const signupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().max(254),
   password: z.string().min(8).max(72),
   role: z.enum(["DONOR", "RECIPIENT"]).default("RECIPIENT")
 });
+
+const loginSchema = z.object({
+  email: z.string().trim().email().max(254),
+  password: z.string().min(1).max(72)
+});
+
+// ==================== SIGNUP ====================
 
 router.post("/signup", async (req, res) => {
   try {
@@ -22,14 +32,20 @@ router.post("/signup", async (req, res) => {
     if (!result.success) {
       return res.status(400).json({
         message: "Invalid signup details",
-        errors: result.error.issues.map(issue => ({
+        errors: result.error.issues.map((issue) => ({
           field: issue.path.join("."),
           message: issue.message
         }))
       });
     }
 
-    const { name, email, password, role } = result.data;
+    const {
+      name,
+      email,
+      password,
+      role
+    } = result.data;
+
     const normalizedEmail = email.toLowerCase();
 
     const existingUser = await User.findOne({
@@ -54,15 +70,17 @@ router.post("/signup", async (req, res) => {
     });
 
     return res.status(201).json({
-      message: "Account created. Email verification is required.",
+      message: "Account created successfully.",
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
+        organizationId: user.organizationId,
         emailVerified: user.emailVerified
       }
     });
+
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({
@@ -78,12 +96,11 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-const loginSchema = z.object({
-  email: z.string().trim().email().max(254),
-  password: z.string().min(1).max(72)
-});
+// ==================== LOGIN ====================
 
 router.post("/login", async (req, res) => {
+  console.log("LOGIN ROUTE HIT");
+
   try {
     const result = loginSchema.safeParse(req.body);
 
@@ -96,7 +113,9 @@ router.post("/login", async (req, res) => {
     const email = result.data.email.toLowerCase();
     const { password } = result.data;
 
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({
+      email
+    }).select("+password");
 
     if (!user) {
       return res.status(401).json({
@@ -115,9 +134,8 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Generate JWT only after successful password verification.
     if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET is missing from environment variables");
+      console.error("JWT_SECRET is missing from .env");
 
       return res.status(500).json({
         message: "Authentication configuration error"
@@ -127,7 +145,10 @@ router.post("/login", async (req, res) => {
     const token = jwt.sign(
       {
         id: user._id.toString(),
-        role: user.role
+        role: user.role,
+        organizationId: user.organizationId
+          ? user.organizationId.toString()
+          : null
       },
       process.env.JWT_SECRET,
       {
@@ -137,20 +158,26 @@ router.post("/login", async (req, res) => {
     );
 
     return res.status(200).json({
-      message: "Login credentials verified successfully",
+      message: "Login successful",
+
       token,
+
       tokenType: "Bearer",
+
       expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
+        organizationId: user.organizationId,
         emailVerified: user.emailVerified
       }
     });
+
   } catch (error) {
-    console.error("Login error:", error.message);
+    console.error("Login error:", error);
 
     return res.status(500).json({
       message: "Unable to log in"
@@ -158,38 +185,46 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// ==================== LOGOUT ====================
 
 router.post("/logout", authenticateToken, async (req, res) => {
   try {
     const decoded = req.user;
 
-    if (!decoded.exp) {
+    if (!decoded || !decoded.exp || !req.token) {
       return res.status(401).json({
-        message: "Token expiration is missing.",
+        message: "Invalid authentication token."
       });
     }
 
     await TokenBlacklist.updateOne(
-      { token: req.token },
+      {
+        token: req.token
+      },
       {
         $setOnInsert: {
           token: req.token,
-          expiresAt: new Date(decoded.exp * 1000),
-        },
+          expiresAt: new Date(decoded.exp * 1000)
+        }
       },
-      { upsert: true }
+      {
+        upsert: true
+      }
     );
 
     return res.status(200).json({
-      message: "Logged out successfully.",
+      message: "Logged out successfully."
     });
+
   } catch (error) {
-    console.error("Logout error:", error);
+    console.error("Logout error:", error.message);
 
     return res.status(500).json({
-      message: "Could not log out. Please try again.",
+      message: "Could not log out. Please try again."
     });
   }
 });
+
+// ==================== EXPORT ====================
 
 module.exports = router;
