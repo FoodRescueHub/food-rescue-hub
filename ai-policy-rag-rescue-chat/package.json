@@ -1,0 +1,18 @@
+{
+  "name": "ai-policy-rag-rescue-chat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Approved-policy-only RAG service for rescue coordination.",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test",
+    "import:policy": "node scripts/importMember7Policy.js",
+    "index:policy": "node scripts/indexApprovedPolicy.js",
+    "create:vector-index": "node scripts/createVectorIndex.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
