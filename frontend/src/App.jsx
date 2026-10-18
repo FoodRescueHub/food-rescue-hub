@@ -33,6 +33,10 @@ function App() {
   const [description, setDescription] = useState("");
   const [pickupAddress, setPickupAddress] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+  const [donorPickupStart, setDonorPickupStart] = useState("");
+  const [donorPickupEnd, setDonorPickupEnd] = useState("");
+  const [donorAllergenInfoStatus, setDonorAllergenInfoStatus] = useState("UNKNOWN");
+  const [donorAllergens, setDonorAllergens] = useState("");
 
   // ==================== AUTH ====================
   async function handleAuth(e) {
@@ -127,7 +131,10 @@ function App() {
           pickupZone,
           pickupStart,
           pickupEnd,
-          allergens,
+          allergenRequirements: allergens
+            .split(",")
+            .map((allergen) => allergen.trim())
+            .filter(Boolean),
         }),
       });
 
@@ -361,6 +368,24 @@ function App() {
   async function handleDonationSubmit(e) {
     e.preventDefault();
 
+    if (!donorPickupStart || !donorPickupEnd) {
+      alert("Please provide the pickup window.");
+      return;
+    }
+
+    if (
+      new Date(donorPickupStart) <= new Date() ||
+      new Date(donorPickupEnd) <= new Date(donorPickupStart)
+    ) {
+      alert("Pickup window must be in the future and end after it starts.");
+      return;
+    }
+
+    const allergenList = donorAllergens
+      .split(",")
+      .map((allergen) => allergen.trim())
+      .filter(Boolean);
+
     try {
       const response = await fetch(`${API}/donations`, {
         method: "POST",
@@ -375,6 +400,10 @@ function App() {
           description,
           pickupAddress,
           expiryDate,
+          pickupStart: donorPickupStart,
+          pickupEnd: donorPickupEnd,
+          allergenInfoStatus: donorAllergenInfoStatus,
+          allergens: donorAllergenInfoStatus === "KNOWN" ? allergenList : [],
         }),
       });
 
@@ -398,6 +427,10 @@ function App() {
       setDescription("");
       setPickupAddress("");
       setExpiryDate("");
+      setDonorPickupStart("");
+      setDonorPickupEnd("");
+      setDonorAllergenInfoStatus("UNKNOWN");
+      setDonorAllergens("");
     } catch (error) {
       console.error(error);
       alert("Backend connection failed.");
@@ -620,6 +653,38 @@ function App() {
             required
           />
 
+          <label>Pickup window starts</label>
+          <input
+            type="datetime-local"
+            value={donorPickupStart}
+            onChange={(e) => setDonorPickupStart(e.target.value)}
+            required
+          />
+
+          <label>Pickup window ends</label>
+          <input
+            type="datetime-local"
+            value={donorPickupEnd}
+            onChange={(e) => setDonorPickupEnd(e.target.value)}
+            required
+          />
+
+          <label>Allergen information</label>
+          <select
+            value={donorAllergenInfoStatus}
+            onChange={(e) => setDonorAllergenInfoStatus(e.target.value)}
+          >
+            <option value="UNKNOWN">Unknown</option>
+            <option value="KNOWN">Known</option>
+          </select>
+
+          <input
+            type="text"
+            placeholder="Allergens, comma-separated (leave blank if none)"
+            value={donorAllergens}
+            onChange={(e) => setDonorAllergens(e.target.value)}
+            disabled={donorAllergenInfoStatus !== "KNOWN"}
+          />
           <label>Expiry date</label>
 
           <input

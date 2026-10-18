@@ -2,6 +2,7 @@ const express = require("express");
 const Donation = require("../models/Donation");
 const authenticateToken = require("../middleware/authMiddleware");
 const authorizeRoles = require("../middleware/roleMiddleware");
+const { createDonationEmbedding } = require("../services/matchingService");
 
 const router = express.Router();
 
@@ -18,7 +19,11 @@ router.post(
         unit,
         description,
         pickupAddress,
-        expiryDate
+        expiryDate,
+        allergenInfoStatus,
+        allergens,
+        pickupStart,
+        pickupEnd
       } = req.body;
 
       if (
@@ -49,7 +54,49 @@ router.post(
         });
       }
 
-      const donation = await Donation.create({
+      const resolvedAllergenInfoStatus = allergenInfoStatus || "UNKNOWN";
+      if (!["KNOWN", "UNKNOWN"].includes(resolvedAllergenInfoStatus)) {
+        return res.status(400).json({
+          message: "Allergen information status must be KNOWN or UNKNOWN."
+        });
+      }
+
+      if (
+        allergens !== undefined &&
+        (!Array.isArray(allergens) ||
+          !allergens.every((allergen) => typeof allergen === "string" && allergen.trim()))
+      ) {
+        return res.status(400).json({
+          message: "Allergens must be a list of non-empty strings."
+        });
+      }
+
+      if (resolvedAllergenInfoStatus === "KNOWN" && !Array.isArray(allergens)) {
+        return res.status(400).json({
+          message: "Provide the allergen list when allergen information is KNOWN."
+        });
+      }
+
+      const pickupWindowProvided = pickupStart !== undefined || pickupEnd !== undefined;
+      let parsedPickupStart;
+      let parsedPickupEnd;
+      if (pickupWindowProvided) {
+        parsedPickupStart = new Date(pickupStart);
+        parsedPickupEnd = new Date(pickupEnd);
+        if (
+          !pickupStart ||
+          !pickupEnd ||
+          Number.isNaN(parsedPickupStart.getTime()) ||
+          Number.isNaN(parsedPickupEnd.getTime()) ||
+          parsedPickupStart <= new Date() ||
+          parsedPickupEnd <= parsedPickupStart
+        ) {
+          return res.status(400).json({
+            message: "Provide a future pickup window with an end after its start."
+          });
+        }
+      }
+      const donationData = {
         foodName: foodName.trim(),
         quantity,
         unit: unit.trim(),
@@ -59,8 +106,23 @@ router.post(
             : "",
         pickupAddress: pickupAddress.trim(),
         expiryDate: parsedExpiry,
+        allergenInfoStatus: resolvedAllergenInfoStatus,
+        allergens: resolvedAllergenInfoStatus === "KNOWN"
+          ? allergens.map((allergen) => allergen.trim())
+          : [],
+        ...(pickupWindowProvided
+          ? { pickupStart: parsedPickupStart, pickupEnd: parsedPickupEnd }
+          : {}),
         donor: req.user.id
-      });
+      };
+
+      try {
+        donationData.embedding = await createDonationEmbedding(donationData);
+      } catch (embeddingError) {
+        console.warn("Donation embedding unavailable:", embeddingError.message);
+      }
+
+      const donation = await Donation.create(donationData);
 
       return res.status(201).json({
         message: "Food donation created successfully",
