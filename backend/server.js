@@ -11,6 +11,8 @@ const donationRoutes = require("./routes/donations");
 const claimRoutes = require("./routes/claims");
 const needRoutes = require("./routes/needs");
 const reservationRoutes = require("./routes/reservations");
+const rescueChatRoutes = require("./routes/rescueChat");
+const policyRoutes = require("./routes/policies");
 
 const app = express();
 
@@ -47,6 +49,13 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/claims", claimRoutes);
 app.use("/api/needs", needRoutes);
 app.use("/api", reservationRoutes);
+app.use("/api/rescue-chat", rescueChatRoutes);
+app.use("/api/policies", policyRoutes);
+
+app.use((error, req, res, next) => {
+  console.error("API error:", error);
+  res.status(500).json({ error: "Unable to complete this request." });
+});
 
 // Root route
 app.get("/", (req, res) => {

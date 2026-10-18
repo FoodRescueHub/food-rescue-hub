@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "create:vector-index": "node scripts/createVectorIndex.js"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +22,8 @@
     "express-session": "^1.19.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "@langchain/ollama": "^1.1.4",
+    "@langchain/textsplitters": "^1.0.1",
     "mongoose": "^9.11.1",
     "nodemailer": "^10.1.0",
     "zod": "^4.6.5"
