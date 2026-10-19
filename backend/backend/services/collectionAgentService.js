@@ -17,10 +17,12 @@ function evaluateDonationMatch(need, donation) {
     (requestedFood.includes(donatedFood) ||
       donatedFood.includes(requestedFood));
 
-  const unitsMatch = normalize(need.unit) === normalize(donation.unit);
+  const unitsMatch =
+    normalize(need.unit) === normalize(donation.unit);
 
   const quantitySufficient =
-    unitsMatch && Number(donation.quantity) >= Number(need.quantity);
+    unitsMatch &&
+    Number(donation.quantity) >= Number(need.quantity);
 
   const allergensNeedReview =
     Array.isArray(need.allergenRequirements) &&
@@ -28,9 +30,13 @@ function evaluateDonationMatch(need, donation) {
 
   const reasons = [];
 
-  if (!foodMatches) reasons.push("Food type needs manual review.");
-  if (!unitsMatch) reasons.push("Quantity units do not match.");
-  else if (!quantitySufficient) {
+  if (!foodMatches) {
+    reasons.push("Food type needs manual review.");
+  }
+
+  if (!unitsMatch) {
+    reasons.push("Quantity units do not match.");
+  } else if (!quantitySufficient) {
     reasons.push("Donation quantity is insufficient.");
   }
 
@@ -57,7 +63,7 @@ function evaluateDonationMatch(need, donation) {
     unitsMatch,
     quantitySufficient,
     allergensNeedReview,
-    reasons
+    reasons,
   };
 }
 
@@ -66,7 +72,9 @@ async function generateCollectionPlan(needId, recipientId) {
     !mongoose.isValidObjectId(needId) ||
     !mongoose.isValidObjectId(recipientId)
   ) {
-    const error = new Error("Valid need and recipient IDs are required.");
+    const error = new Error(
+      "Valid need and recipient IDs are required."
+    );
     error.status = 400;
     throw error;
   }
@@ -74,7 +82,9 @@ async function generateCollectionPlan(needId, recipientId) {
   const recipient = await User.findById(recipientId);
 
   if (!recipient || !recipient.organizationId) {
-    const error = new Error("Recipient organization was not found.");
+    const error = new Error(
+      "Recipient organization was not found."
+    );
     error.status = 404;
     throw error;
   }
@@ -85,18 +95,20 @@ async function generateCollectionPlan(needId, recipientId) {
     _id: needId,
     organizationId: recipient.organizationId,
     status: "ACTIVE",
-    pickupEnd: { $gt: now }
+    pickupEnd: { $gt: now },
   }).lean();
 
   if (!need) {
-    const error = new Error("Active need not found for this organization.");
+    const error = new Error(
+      "Active need not found for this organization."
+    );
     error.status = 404;
     throw error;
   }
 
   const donations = await Donation.find({
     status: "AVAILABLE",
-    expiryDate: { $gt: now }
+    expiryDate: { $gt: now },
   })
     .sort({ expiryDate: 1 })
     .lean();
@@ -109,13 +121,16 @@ async function generateCollectionPlan(needId, recipientId) {
       unit: donation.unit,
       pickupAddress: donation.pickupAddress,
       expiryDate: donation.expiryDate,
-      ...evaluateDonationMatch(need, donation)
+      ...evaluateDonationMatch(need, donation),
     }))
     .sort((a, b) => {
       if (a.recommended !== b.recommended) {
         return Number(b.recommended) - Number(a.recommended);
       }
-      return new Date(a.expiryDate) - new Date(b.expiryDate);
+
+      return (
+        new Date(a.expiryDate) - new Date(b.expiryDate)
+      );
     });
 
   return {
@@ -127,12 +142,11 @@ async function generateCollectionPlan(needId, recipientId) {
     recommendations,
     requiresCoordinatorReview: true,
     message:
-      "Recommendations are suggestions only. Verify food safety and pickup details before arranging collection."
+      "Recommendations are suggestions only. Verify food safety and pickup details before arranging collection.",
   };
 }
 
 module.exports = {
   generateCollectionPlan,
-  evaluateDonationMatch
+  evaluateDonationMatch,
 };
-
