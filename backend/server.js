@@ -1,4 +1,5 @@
 const express = require("express");
+const collectionAgentRoutes = require("./routes/collectionAgent");
 const cors = require("cors");
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 
@@ -12,6 +13,8 @@ const reservationRoutes = require("./routes/reservations");
 
 const app = express();
 
+app.use(express.json());
+
 // CORS configuration
 app.use(
   cors({
@@ -20,6 +23,8 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+app.use("/api/collection-agent", collectionAgentRoutes);
 
 // JSON body parser
 app.use(express.json());
