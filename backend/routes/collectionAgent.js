@@ -23,19 +23,19 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    const userId = req.user?.id || req.user?._id;
+    const organizationId = req.user?.organizationId;
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required.",
-      });
-    }
+    if (!organizationId) {
+  return res.status(403).json({
+    success: false,
+    message: "Your account is not linked to an organization."
+  });
+}
 
-    const plan = await generateCollectionPlan(
-      parsed.data.needId,
-      userId
-    );
+const plan = await generateCollectionPlan(
+  parsed.data.needId,
+  organizationId
+);
 
     return res.status(200).json({
       success: true,
