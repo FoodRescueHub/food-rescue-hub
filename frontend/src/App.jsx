@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import "./App.css";
+import VolunteerDashboard from "./VolunteerDashboard";
+import CoordinatorDashboard from "./CoordinatorDashboard";
 
 const API = "/api";
 
@@ -697,6 +699,28 @@ function App() {
           ))
         )}
       </div>
+    );
+  }
+
+  // ==================== VOLUNTEER DASHBOARD ====================
+  if (role === "VOLUNTEER") {
+    return (
+      <VolunteerDashboard
+        token={token}
+        logout={logout}
+        API={API}
+      />
+    );
+  }
+
+  // ==================== COORDINATOR DASHBOARD ====================
+  if (role === "COORDINATOR") {
+    return (
+      <CoordinatorDashboard
+        token={token}
+        logout={logout}
+        API={API}
+      />
     );
   }
 
