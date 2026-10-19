@@ -1,0 +1,17 @@
+{
+  "name": "donations_vector_index",
+  "type": "vectorSearch",
+  "definition": {
+    "fields": [
+      {
+        "type": "vector",
+        "path": "embedding",
+        "numDimensions": 768,
+        "similarity": "cosine"
+      },
+      { "type": "filter", "path": "status" },
+      { "type": "filter", "path": "expiryDate" },
+      { "type": "filter", "path": "quantity" }
+    ]
+  }
+}

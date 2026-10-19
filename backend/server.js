@@ -9,6 +9,7 @@ const donationRoutes = require("./routes/donations");
 const claimRoutes = require("./routes/claims");
 const needRoutes = require("./routes/needs");
 const reservationRoutes = require("./routes/reservations");
+const matchingRoutes = require("./routes/matching");
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use("/api", protectedRoutes);
 app.use("/api/donations", donationRoutes);
 app.use("/api/claims", claimRoutes);
 app.use("/api/needs", needRoutes);
+app.use("/api/matching", matchingRoutes);
 app.use("/api", reservationRoutes);
 
 // Root route

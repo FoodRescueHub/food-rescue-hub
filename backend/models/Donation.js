@@ -22,6 +22,25 @@ const donationSchema = new mongoose.Schema(
       type: String,
       default: ""
     },
+    embedding: {
+      type: [Number],
+      select: false
+    },
+    allergenInfoStatus: {
+      type: String,
+      enum: ["KNOWN", "UNKNOWN"],
+      default: "UNKNOWN"
+    },
+    allergens: {
+      type: [String],
+      default: []
+    },
+    pickupStart: {
+      type: Date
+    },
+    pickupEnd: {
+      type: Date
+    },
     pickupAddress: {
       type: String,
       required: true,
