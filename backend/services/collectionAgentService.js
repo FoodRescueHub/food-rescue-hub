@@ -1,219 +1,228 @@
 
-const mongoose = require("mongoose");
-const Donation = require("../models/Donation");
 const Need = require("../models/Need");
-const User = require("../models/User");
+const Donation = require("../models/Donation");
+const {
+  readNeeds,
+  findAvailableLots,
+  checkPickupCapacity,
+} = require("./collectionAgentTools");
 
 function normalize(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function getAllergenWarnings(donation) {
+  return [
+    "Allergen information is UNKNOWN. Verify ingredients and cross-contact risks before approval.",
+    ...(donation.description
+      ? []
+      : ["Donation description is missing."]),
+  ];
 }
 
 function evaluateDonationMatch(need, donation) {
-  const requestedFood = normalize(need.foodType);
-  const donatedFood = normalize(donation.foodName);
-
-  const foodMatches =
-    Boolean(requestedFood && donatedFood) &&
-    (requestedFood.includes(donatedFood) ||
-      donatedFood.includes(requestedFood));
-
-  const unitsMatch =
-    normalize(need.unit) === normalize(donation.unit);
-
-  const quantitySufficient =
-    unitsMatch &&
-    Number(donation.quantity) >= Number(need.quantity);
-
-  const allergenRequirements =
-    Array.isArray(need.allergenRequirements)
-      ? need.allergenRequirements
-      : [];
-
-  // Donation schema currently has no allergen declaration.
-  const allergensNeedReview = true;
-
-  const reasons = [];
-
-  if (!foodMatches) {
-    reasons.push("Food type needs manual review.");
-  }
-
-  if (!unitsMatch) {
-    reasons.push("Quantity units do not match.");
-  } else if (!quantitySufficient) {
-    reasons.push("Donation alone does not cover the full need.");
-  }
-
-  if (allergenRequirements.length > 0) {
-    reasons.push("Need has allergen requirements.");
-  }
-
-  reasons.push(
-    "Donation allergen information is unavailable; verify food safety."
+  const warnings = [];
+  const needFood = normalize(need.foodType);
+  const donationFood = normalize(
+    donation.foodName || donation.description
   );
 
+  const needUnit = normalize(need.unit);
+  const donationUnit = normalize(donation.unit);
+
+  if (!needFood || !donationFood || needFood !== donationFood) {
+    warnings.push("Food type does not exactly match the need.");
+  }
+
+  if (needUnit !== donationUnit) {
+    warnings.push("Units do not match; automatic quantity conversion is unavailable.");
+  }
+
+  const quantity = Number(donation.quantity);
+  const expiryDate = new Date(donation.expiryDate);
+
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    warnings.push("Donation quantity is invalid.");
+  }
+
+  if (
+    !donation.expiryDate ||
+    Number.isNaN(expiryDate.getTime()) ||
+    expiryDate <= new Date()
+  ) {
+    warnings.push("Donation is expired or has no valid expiry date.");
+  }
+
+  warnings.push(...getAllergenWarnings(donation));
+
   return {
-  
-    recommended:
-    foodMatches &&
-    unitsMatch &&
-    quantitySufficient &&
-    !allergensNeedReview,
-    needsReview:
-      !foodMatches ||
-      !unitsMatch ||
-      !quantitySufficient ||
-      allergensNeedReview,
-    foodMatches,
-    unitsMatch,
-    quantitySufficient,
-    allergensNeedReview,
-    reasons,
+    matches:
+      warnings.every(
+        (warning) =>
+          !warning.startsWith("Food type") &&
+          !warning.startsWith("Units do not match") &&
+          !warning.startsWith("Donation quantity") &&
+          !warning.startsWith("Donation is expired")
+      ),
+    foodTypeMatch: Boolean(needFood && donationFood && needFood === donationFood),
+    unitMatch: Boolean(needUnit && donationUnit && needUnit === donationUnit),
+    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 0,
+    warnings,
+    allergenStatus: "UNKNOWN",
+    requiresCoordinatorReview: true,
   };
 }
 
 function buildCombinedPlan(need, donations) {
   const requestedQuantity = Number(need.quantity);
+  const requestedUnit = normalize(need.unit);
 
-  const eligible = donations
-    .filter((donation) => {
-      const match = evaluateDonationMatch(need, donation);
-
-      return (
-        match.foodMatches &&
-        match.unitsMatch &&
-        Number(donation.quantity) > 0
-      );
-    })
-    .sort(
-      (a, b) =>
-        new Date(a.expiryDate) - new Date(b.expiryDate)
-    );
+  if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) {
+    return {
+      selectedDonations: [],
+      requestedQuantity: need.quantity,
+      requestedUnit: need.unit,
+      allocatedQuantity: 0,
+      remainingQuantity: need.quantity,
+      warnings: ["Requested need quantity is invalid."],
+      requiresCoordinatorReview: true,
+    };
+  }
 
   let remaining = requestedQuantity;
-  const selected = [];
+  const selectedDonations = [];
+  const warnings = [];
 
-  for (const donation of eligible) {
+  const sortedDonations = [...donations].sort(
+    (a, b) => new Date(a.expiryDate) - new Date(b.expiryDate)
+  );
+
+  for (const donation of sortedDonations) {
     if (remaining <= 0) break;
 
-    const available = Number(donation.quantity);
-    const allocated = Math.min(available, remaining);
+    const match = evaluateDonationMatch(need, donation);
 
-    selected.push({
-      donationId: donation._id,
-      donorId: donation.donor,
+    if (!match.foodTypeMatch || !match.unitMatch || match.quantity <= 0) {
+      warnings.push(
+        `${donation.foodName || "Donation"} was not selected because its food type, unit, or quantity needs review.`
+      );
+      continue;
+    }
+
+    if (
+      !donation.expiryDate ||
+      new Date(donation.expiryDate) <= new Date()
+    ) {
+      warnings.push(
+        `${donation.foodName || "Donation"} was not selected because its expiry date is invalid or past.`
+      );
+      continue;
+    }
+
+    const allocatedQuantity = Math.min(match.quantity, remaining);
+
+    selectedDonations.push({
+      donationId: String(donation._id),
       foodName: donation.foodName,
-      availableQuantity: available,
-      allocatedQuantity: allocated,
+      availableQuantity: match.quantity,
+      allocatedQuantity,
       unit: donation.unit,
       pickupAddress: donation.pickupAddress,
       expiryDate: donation.expiryDate,
-      needsReview: true,
-      reviewReason:
-        "Confirm allergen information, food safety, and pickup feasibility.",
+      allergenStatus: "UNKNOWN",
+      reviewReason: match.warnings,
+      requiresCoordinatorReview: true,
     });
 
-    remaining -= allocated;
+    remaining -= allocatedQuantity;
   }
 
-  const allocatedQuantity =
-    requestedQuantity - Math.max(remaining, 0);
+  if (remaining > 0) {
+    warnings.push(
+      `The plan is short by ${remaining} ${requestedUnit || "units"}.`
+    );
+  }
+
+  warnings.push(
+    "This is a proposal only. No donations are reserved or changed."
+  );
 
   return {
     requestedQuantity,
-    allocatedQuantity,
-    remainingQuantity: Math.max(remaining, 0),
-    unit: need.unit,
-    fulfilledByProposal: remaining <= 0,
-    selectedDonations: selected,
+    requestedUnit: need.unit,
+    selectedDonations,
+    allocatedQuantity: requestedQuantity - remaining,
+    remainingQuantity: remaining,
+    warnings,
     requiresCoordinatorReview: true,
     inventoryChanged: false,
+    proposalOnly: true,
   };
 }
 
-async function generateCollectionPlan(needId, recipientId) {
-  if (
-    !mongoose.isValidObjectId(needId) ||
-    !mongoose.isValidObjectId(recipientId)
-  ) {
-    const error = new Error(
-      "Valid need and recipient IDs are required."
-    );
-    error.status = 400;
-    throw error;
+async function generateCollectionPlan(needId, organizationId) {
+  const need = await Need.findById(needId).lean();
+
+  if (!need) {
+    throw new Error("Food need not found.");
   }
 
-  const recipient = await User.findById(recipientId).lean();
+  if (
+    organizationId &&
+    String(need.organizationId) !== String(organizationId)
+  ) {
+    throw new Error("You are not authorized to access this food need.");
+  }
 
-  if (!recipient || !recipient.organizationId) {
-    const error = new Error(
-      "Recipient organization was not found."
-    );
-    error.status = 404;
-    throw error;
+  if (need.status !== "ACTIVE") {
+    throw new Error("Only active food needs can have a collection plan.");
   }
 
   const now = new Date();
+  const pickupStart =
+    need.pickupStart && new Date(need.pickupStart) > now
+      ? new Date(need.pickupStart)
+      : now;
 
-  const need = await Need.findOne({
-    _id: needId,
-    organizationId: recipient.organizationId,
-    status: "ACTIVE",
-    pickupEnd: { $gt: now },
-  }).lean();
+  const pickupEnd =
+    need.pickupEnd && new Date(need.pickupEnd) > pickupStart
+      ? new Date(need.pickupEnd)
+      : new Date(pickupStart.getTime() + 60 * 60 * 1000);
 
-  if (!need) {
-    const error = new Error(
-      "Active need not found for this organization."
-    );
-    error.status = 404;
-    throw error;
-  }
+  const needs = organizationId
+    ? await readNeeds(organizationId)
+    : [need];
 
-  const donations = await Donation.find({
-    status: "AVAILABLE",
-    expiryDate: { $gt: now },
-  })
-    .sort({ expiryDate: 1 })
-    .lean();
+  const availableLots = await findAvailableLots({
+    start: pickupStart,
+    end: pickupEnd,
+  });
 
-  const recommendations = donations
-    .map((donation) => ({
-      donationId: donation._id,
-      foodName: donation.foodName,
-      quantity: donation.quantity,
-      unit: donation.unit,
-      pickupAddress: donation.pickupAddress,
-      expiryDate: donation.expiryDate,
-      ...evaluateDonationMatch(need, donation),
-    }))
-    .sort((a, b) => {
-      if (a.foodMatches !== b.foodMatches) {
-        return Number(b.foodMatches) - Number(a.foodMatches);
-      }
-
-      if (a.unitsMatch !== b.unitsMatch) {
-        return Number(b.unitsMatch) - Number(a.unitsMatch);
-      }
-
-      return (
-        new Date(a.expiryDate) - new Date(b.expiryDate)
-      );
-    });
-
-  const combinedPlan = buildCombinedPlan(need, donations);
+  const plan = buildCombinedPlan(need, availableLots);
 
   return {
-    needId: need._id,
-    requestedFood: need.foodType,
-    requestedQuantity: need.quantity,
-    requestedUnit: need.unit,
-    recommendationCount: recommendations.length,
-    recommendations,
-    combinedPlan,
+    needId: String(need._id),
+    foodType: need.foodType,
+    organizationId: String(need.organizationId),
+    requestedQuantity: plan.requestedQuantity,
+    requestedUnit: plan.requestedUnit,
+    allocatedQuantity: plan.allocatedQuantity,
+    remainingQuantity: plan.remainingQuantity,
+    selectedDonations: plan.selectedDonations,
+    combinedPlan: plan,
+    otherActiveNeedsCount: needs.length,
+    proposalOnly: true,
+    inventoryChanged: false,
     requiresCoordinatorReview: true,
-    message:
-      "This is a proposal only. Verify food safety, allergen information, pickup windows, travel, and volunteer capacity before coordinator approval. No inventory is reserved or changed.",
+    travelStatus: "UNVERIFIED",
+    volunteerCapacityStatus: "UNVERIFIED",
+    warnings: [
+      ...plan.warnings,
+      "Travel estimates are not configured.",
+      "Donor pickup availability must be confirmed.",
+      "Volunteer capacity must be confirmed.",
+      "Coordinator approval is required before any reservation.",
+    ],
   };
 }
 
@@ -221,4 +230,7 @@ module.exports = {
   generateCollectionPlan,
   evaluateDonationMatch,
   buildCombinedPlan,
+  readNeeds,
+  findAvailableLots,
+  checkPickupCapacity,
 };

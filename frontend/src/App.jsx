@@ -4,6 +4,10 @@ import "./App.css";
 const API = "/api";
 
 function App() {
+  const [collectionPlans, setCollectionPlans] = useState({});
+  const [loadingPlanId, setLoadingPlanId] = useState(null);
+  const [planError, setPlanError] = useState("");
+
   const [token, setToken] = useState(localStorage.getItem("token"));
   const [role, setRole] = useState(localStorage.getItem("role"));
   const [mode, setMode] = useState("login");
@@ -33,6 +37,43 @@ function App() {
   const [description, setDescription] = useState("");
   const [pickupAddress, setPickupAddress] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+  
+  
+async function generatePlan(needId) {
+  setLoadingPlanId(needId);
+  setPlanError("");
+
+  try {
+    const response = await fetch(`${API}/collection-agent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ needId }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.message || "Could not generate collection plan."
+      );
+    }
+
+    setCollectionPlans((previous) => ({
+      ...previous,
+      [needId]: data.data,
+    }));
+  } catch (error) {
+    setPlanError(
+      error.message || "Could not connect to the backend."
+    );
+  } finally {
+    setLoadingPlanId(null);
+  }
+}
+
 
   // ==================== AUTH ====================
   async function handleAuth(e) {
@@ -794,38 +835,123 @@ function App() {
       </form>
 
       <hr />
+      
 
       <h2>My Food Needs</h2>
+
+      {planError && (
+        <p role="alert" className="error-message">
+          {planError}
+        </p>
+      )}
 
       {needs.length === 0 ? (
         <p>No food needs found.</p>
       ) : (
         needs.map((need) => (
-          <div
-            key={need._id}
-            className="card"
-          >
+          <div key={need._id} className="card">
             <h3>{need.foodType}</h3>
 
             <p>
-              Quantity:{" "}
-              {need.quantity}{" "}
-              {need.unit}
+              Quantity: {need.quantity} {need.unit}
             </p>
 
-            <p>
-              Pickup zone:{" "}
-              {need.pickupZone}
-            </p>
+            <p>Pickup zone: {need.pickupZone}</p>
+            <p>Status: {need.status}</p>
 
-            <p>
-              Status:{" "}
-              {need.status}
-            </p>
+            <button
+              type="button"
+              onClick={() => generatePlan(need._id)}
+              disabled={loadingPlanId === need._id}
+            >
+              {loadingPlanId === need._id
+                ? "Generating proposal..."
+                : "Generate Collection Plan"}
+            </button>
+
+            {collectionPlans[need._id] && (
+              <div className="card">
+                <h3>Proposed Pickup Plan</h3>
+
+                <p>
+                  Requested:{" "}
+                  {collectionPlans[need._id].requestedQuantity}{" "}
+                  {collectionPlans[need._id].requestedUnit}
+                </p>
+
+                <p>
+                  Coordinator review required:{" "}
+                  {collectionPlans[need._id]
+                    .requiresCoordinatorReview
+                    ? "Yes"
+                    : "No"}
+                </p>
+
+                <p>
+                  Inventory changed:{" "}
+                  {collectionPlans[need._id].inventoryChanged
+                    ? "Yes"
+                    : "No"}
+                </p>
+
+                <p>{collectionPlans[need._id].message}</p>
+
+                <h4>Suggested Donations</h4>
+
+                {(
+                  collectionPlans[need._id].combinedPlan
+                    ?.selectedDonations || []
+                ).map((donation) => (
+                  <div
+                    key={String(donation.donationId)}
+                    className="card"
+                  >
+                    <p>
+                      <strong>{donation.foodName}</strong>
+                    </p>
+
+                    <p>
+                      Proposed quantity:{" "}
+                      {donation.allocatedQuantity} {donation.unit}
+                    </p>
+
+                    <p>Pickup: {donation.pickupAddress}</p>
+
+                    <p>
+                      Allergen status: UNKNOWN — verify before
+                      approval.
+                    </p>
+
+                    <p>{donation.reviewReason}</p>
+                  </div>
+                ))}
+
+                {collectionPlans[need._id].combinedPlan
+                  ?.remainingQuantity > 0 && (
+                  <p>
+                    Still needed:{" "}
+                    {
+                      collectionPlans[need._id].combinedPlan
+                        .remainingQuantity
+                    }{" "}
+                    {collectionPlans[need._id].requestedUnit}
+                  </p>
+                )}
+
+                <p>
+                  Travel, donor availability, volunteer capacity,
+                  and pickup conflicts must be verified before
+                  coordinator approval. This proposal does not
+                  reserve food.
+                </p>
+              </div>
+            )}
           </div>
         ))
       )}
 
+
+      
       <hr />
 
       <h2>Available Food Donations</h2>
