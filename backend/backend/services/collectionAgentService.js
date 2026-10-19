@@ -1,8 +1,8 @@
 
 const mongoose = require("mongoose");
-const Donation = require("../models/Donation.js");
-const Need = require("../models/Need.js");
-const User = require("../models/User.js");
+const Donation = require("../models/Donation");
+const Need = require("../models/Need");
+const User = require("../models/User");
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
