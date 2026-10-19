@@ -1,101 +1,33 @@
 
-jest.mock("../models/Donation", () => ({
-  find: jest.fn()
-}));
+name: Collection Agent Tests
 
-jest.mock("../models/Need", () => ({
-  findOne: jest.fn()
-}));
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
-jest.mock("../models/User", () => ({
-  findById: jest.fn()
-}));
+jobs:
+  test:
+    runs-on: ubuntu-latest
 
-const {
-  evaluateDonationMatch
-} = require("./collectionAgentService");
+    defaults:
+      run:
+        working-directory: backend
 
-describe("evaluateDonationMatch", () => {
-  test("recommends matching food with sufficient quantity and no allergen review", () => {
-    const need = {
-      foodType: "Rice",
-      quantity: 10,
-      unit: "kg",
-      allergenRequirements: []
-    };
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-    const donation = {
-      foodName: "Rice",
-      quantity: 15,
-      unit: "kg"
-    };
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
 
-    const result = evaluateDonationMatch(need, donation);
+      - name: Install dependencies
+        run: npm ci
 
-    expect(result.recommended).toBe(true);
-    expect(result.needsReview).toBe(false);
-    expect(result.quantitySufficient).toBe(true);
-  });
-
-  test("does not recommend a donation with insufficient quantity", () => {
-    const need = {
-      foodType: "Rice",
-      quantity: 10,
-      unit: "kg",
-      allergenRequirements: []
-    };
-
-    const donation = {
-      foodName: "Rice",
-      quantity: 5,
-      unit: "kg"
-    };
-
-    const result = evaluateDonationMatch(need, donation);
-
-    expect(result.recommended).toBe(false);
-    expect(result.quantitySufficient).toBe(false);
-    expect(result.needsReview).toBe(true);
-  });
-
-  test("requires review when allergen requirements are present", () => {
-    const need = {
-      foodType: "Rice",
-      quantity: 10,
-      unit: "kg",
-      allergenRequirements: ["peanuts"]
-    };
-
-    const donation = {
-      foodName: "Rice",
-      quantity: 15,
-      unit: "kg"
-    };
-
-    const result = evaluateDonationMatch(need, donation);
-
-    expect(result.recommended).toBe(false);
-    expect(result.allergensNeedReview).toBe(true);
-    expect(result.needsReview).toBe(true);
-  });
-
-  test("does not recommend donations with mismatched units", () => {
-    const need = {
-      foodType: "Rice",
-      quantity: 10,
-      unit: "kg",
-      allergenRequirements: []
-    };
-
-    const donation = {
-      foodName: "Rice",
-      quantity: 15,
-      unit: "litres"
-    };
-
-    const result = evaluateDonationMatch(need, donation);
-
-    expect(result.recommended).toBe(false);
-    expect(result.unitsMatch).toBe(false);
-  });
-});
+      - name: Run Collection Agent tests
+        run: npx --yes jest services/collectionAgentService.test.js --runInBand --no-cache
