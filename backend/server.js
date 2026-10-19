@@ -1,4 +1,5 @@
 const express = require("express");
+const collectionAgentRoutes = require("./routes/collectionAgent");
 const cors = require("cors");
 require("dotenv").config();
 
@@ -22,6 +23,8 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+app.use("/api/collection-agent", collectionAgentRoutes);
 
 // JSON body parser
 app.use(express.json());
