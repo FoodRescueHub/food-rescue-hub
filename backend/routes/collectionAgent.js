@@ -11,7 +11,7 @@ const planSchema = z.object({
   needId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid need ID"),
 });
 
-router.post("/", async (req, res) => {
+router.post("/", authenticateToken, async (req, res) => {
   try {
     const parsed = planSchema.safeParse(req.body);
 
