@@ -1,89 +1,55 @@
 
-const { evaluateDonationMatch } = jest.requireActual(
-  "./collectionAgentService"
-);
+const { evaluateDonationMatch } = require("./donationMatch");
 
 describe("evaluateDonationMatch", () => {
-  test("recommends matching food when quantity is sufficient", () => {
-    const need = {
-      foodType: "Rice",
-      quantity: 10,
-      unit: "kg",
-      allergenRequirements: []
-    };
+  const donation = {
+    foodType: "Vegetables",
+    unit: "kg",
+    quantity: 10,
+    allergens: [],
+  };
 
-    const donation = {
-      foodName: "Rice",
-      quantity: 15,
-      unit: "kg"
-    };
+  const need = {
+    foodType: "vegetables",
+    unit: "kg",
+    quantity: 5,
+    allergens: [],
+  };
 
-    const result = evaluateDonationMatch(need, donation);
+  test("matches compatible food and sufficient quantity", () => {
+    const result = evaluateDonationMatch(donation, need);
 
-    expect(result.recommended).toBe(true);
-    expect(result.needsReview).toBe(false);
+    expect(result.matches).toBe(true);
     expect(result.quantitySufficient).toBe(true);
   });
 
-  test("does not recommend a donation with insufficient quantity", () => {
-    const need = {
-      foodType: "Rice",
-      quantity: 10,
-      unit: "kg",
-      allergenRequirements: []
-    };
+  test("rejects insufficient quantity", () => {
+    const result = evaluateDonationMatch(
+      { ...donation, quantity: 2 },
+      need
+    );
 
-    const donation = {
-      foodName: "Rice",
-      quantity: 5,
-      unit: "kg"
-    };
-
-    const result = evaluateDonationMatch(need, donation);
-
-    expect(result.recommended).toBe(false);
+    expect(result.matches).toBe(false);
     expect(result.quantitySufficient).toBe(false);
-    expect(result.needsReview).toBe(true);
   });
 
-  test("requires review when allergen requirements are present", () => {
-    const need = {
-      foodType: "Rice",
-      quantity: 10,
-      unit: "kg",
-      allergenRequirements: ["peanuts"]
-    };
+  test("flags allergen compatibility for manual review", () => {
+    const result = evaluateDonationMatch(
+      { ...donation, allergens: ["peanuts"] },
+      { ...need, allergens: ["peanuts"] }
+    );
 
-    const donation = {
-      foodName: "Rice",
-      quantity: 15,
-      unit: "kg"
-    };
-
-    const result = evaluateDonationMatch(need, donation);
-
-    expect(result.recommended).toBe(false);
-    expect(result.allergensNeedReview).toBe(true);
-    expect(result.needsReview).toBe(true);
+    expect(result.matches).toBe(false);
+    expect(result.allergenReviewRequired).toBe(true);
   });
 
-  test("does not recommend donations with mismatched units", () => {
-    const need = {
-      foodType: "Rice",
-      quantity: 10,
-      unit: "kg",
-      allergenRequirements: []
-    };
+  test("rejects mismatched units", () => {
+    const result = evaluateDonationMatch(
+      donation,
+      { ...need, unit: "litres" }
+    );
 
-    const donation = {
-      foodName: "Rice",
-      quantity: 15,
-      unit: "litres"
-    };
-
-    const result = evaluateDonationMatch(need, donation);
-
-    expect(result.recommended).toBe(false);
+    expect(result.matches).toBe(false);
     expect(result.unitsMatch).toBe(false);
   });
 });
