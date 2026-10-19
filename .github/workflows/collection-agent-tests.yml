@@ -1,8 +1,4 @@
-      - name: Check model files
-        run: |
-          pwd
-          find models -maxdepth 1 -type f
-        working-directory: backend
+
 name: Collection Agent Tests
 
 on:
@@ -32,6 +28,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check model files
+        run: |
+          pwd
+          find models -maxdepth 1 -type f
 
       - name: Run Collection Agent tests
         run: npx --yes jest services/collectionAgentService.test.js --runInBand
