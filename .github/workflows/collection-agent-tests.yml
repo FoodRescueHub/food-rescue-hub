@@ -1,4 +1,8 @@
-
+      - name: Check model files
+        run: |
+          pwd
+          find models -maxdepth 1 -type f
+        working-directory: backend
 name: Collection Agent Tests
 
 on:
