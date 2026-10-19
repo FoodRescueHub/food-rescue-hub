@@ -9,7 +9,7 @@ const http = require("http");
 const BASE = "http://localhost:5000/api";
 
 const COORDINATOR_EMAIL = "coordinator@foodrescue.dev";
-const COORDINATOR_PASSWORD = "FoodRescue@Dev2026!";
+const COORDINATOR_PASSWORD = "Volunteer@2026!";
 
 const POLICY_TITLE = "Food Pickup and Handover Handling Policy";
 const POLICY_VERSION = "1.0";
