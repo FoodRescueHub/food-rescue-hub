@@ -15,6 +15,8 @@ const reservationRoutes = require("./routes/reservations");
 
 const app = express();
 
+app.use(express.json());
+
 // CORS configuration
 app.use(
   cors({
