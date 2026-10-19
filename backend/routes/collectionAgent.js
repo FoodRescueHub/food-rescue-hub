@@ -1,4 +1,4 @@
-
+const authenticateToken = require("../middleware/authMiddleware");
 const express = require("express");
 const { z } = require("zod");
 const {
