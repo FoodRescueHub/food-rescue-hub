@@ -1,6 +1,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import "./App.css";
+import VolunteerDashboard from "./VolunteerDashboard";
+import CoordinatorDashboard from "./CoordinatorDashboard";
 
 const API = "/api";
 
@@ -191,36 +193,34 @@ function App() {
   // ==================== RECIPIENT - LOAD MY NEEDS ====================
 
   const loadMyNeeds = useCallback(async () => {
+    try {
+      const response = await fetch(`${API}/needs`, {
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Cache-Control": "no-cache",
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.message || "Could not load food needs");
+        return;
+      }
+
+      setNeeds(data.needs || data || []);
+    } catch (error) {
+      console.error(error);
+      alert("Backend connection failed.");
+    }
+  }, [token]);
 
   // Cancel an active food need
-  async function loadMyNeeds() {
-  try {
-    const response = await fetch(`${API}/needs`, {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Cache-Control": "no-cache",
-      },
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      alert(data.message || "Could not load food needs");
-      return;
-    }
-
-    setNeeds(data.needs || data || []);
-  } catch (error) {
-    console.error(error);
-    alert("Backend connection failed.");
-  }
-}
   async function cancelNeed(id) {
     if (!window.confirm("Are you sure you want to cancel this food need?")) {
       return;
     }
-
 
     try {
       const response = await fetch(`${API}/needs/${id}`, {
@@ -245,7 +245,7 @@ function App() {
       console.error(error);
       alert("Backend connection failed.");
     }
-  }, [token]);
+  }
 
   // ==================== RECIPIENT - LOAD DONATIONS ====================
   const loadAvailableDonations = useCallback(async () => {
@@ -728,6 +728,28 @@ useEffect(() => {
     );
   }
 
+  // ==================== VOLUNTEER DASHBOARD ====================
+  if (role === "VOLUNTEER") {
+    return (
+      <VolunteerDashboard
+        token={token}
+        logout={logout}
+        API={API}
+      />
+    );
+  }
+
+  // ==================== COORDINATOR DASHBOARD ====================
+  if (role === "COORDINATOR") {
+    return (
+      <CoordinatorDashboard
+        token={token}
+        logout={logout}
+        API={API}
+      />
+    );
+  }
+
   // ==================== RECIPIENT DASHBOARD ====================
   return (
     <div className="container">
@@ -815,11 +837,6 @@ useEffect(() => {
       )}
 
       {needs.length === 0 ? (
-
-     
-
-            {needs.length === 0 ? (
-
         <p>No food needs found.</p>
       ) : (
         needs.map((need) => (
@@ -916,6 +933,7 @@ useEffect(() => {
                   reserve food.
                 </p>
               </div>
+            )}
 
             <p>Quantity: {need.quantity} {need.unit}</p>
             <p>Pickup zone: {need.pickupZone}</p>

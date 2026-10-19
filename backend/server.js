@@ -10,6 +10,9 @@ const donationRoutes = require("./routes/donations");
 const claimRoutes = require("./routes/claims");
 const needRoutes = require("./routes/needs");
 const reservationRoutes = require("./routes/reservations");
+const pickupRoutes = require("./routes/pickups");
+const handoverRoutes = require("./routes/handovers");
+const policyRoutes = require("./routes/policies");
 
 const app = express();
 
@@ -43,6 +46,13 @@ app.get("/api/reservations/test", (req, res) => {
   });
 });
 
+// Pickup test route
+app.get("/api/pickups/test", (req, res) => {
+  res.json({
+    message: "Pickup route test working!",
+  });
+});
+
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api", protectedRoutes);
@@ -50,6 +60,9 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/claims", claimRoutes);
 app.use("/api/needs", needRoutes);
 app.use("/api", reservationRoutes);
+app.use("/api/pickups", pickupRoutes);
+app.use("/api", handoverRoutes);
+app.use("/api", policyRoutes);
 
 // Root route
 app.get("/", (req, res) => {
