@@ -2,7 +2,7 @@ require("dotenv").config();
 
 const connectDB = require("../config/db");
 const Donation = require("../models/Donation");
-const { createDonationEmbedding } = require("../services/matchingService");
+const { storeDonationEmbedding } = require("../services/matchingService");
 
 async function backfillDonationEmbeddings() {
   await connectDB();
@@ -12,11 +12,7 @@ async function backfillDonationEmbeddings() {
   let updated = 0;
 
   for (const donation of donations) {
-    const embedding = await createDonationEmbedding(donation);
-    await Donation.updateOne(
-      { _id: donation._id, embedding: { $exists: false } },
-      { $set: { embedding } }
-    );
+    await storeDonationEmbedding(donation);
     updated += 1;
     console.log(`Embedded listing ${donation._id} (${updated}/${donations.length})`);
   }

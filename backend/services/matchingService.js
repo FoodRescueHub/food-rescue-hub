@@ -30,19 +30,17 @@ async function createDonationEmbedding(donation) {
   return getEmbeddings().embedQuery(donationText(donation));
 }
 
-async function searchDonationVectors(need, now) {
-  const query = [
-    `Recipient needs ${need.quantity} ${need.unit} of ${need.foodType}.`,
-    need.pickupZone ? `Pickup area: ${need.pickupZone}.` : ""
-  ].filter(Boolean).join(" ");
-  const queryVector = await getEmbeddings().embedQuery(query);
-  const index = process.env.MONGODB_VECTOR_INDEX_NAME || "donations_vector_index";
-  const configuredLimit = Number(process.env.MATCHING_MAX_CANDIDATES);
-  const limit = Number.isInteger(configuredLimit) && configuredLimit > 0
-    ? Math.min(configuredLimit, 100)
-    : 50;
+async function storeDonationEmbedding(donation, embedding) {
+  const vector = embedding || await createDonationEmbedding(donation);
+  await Donation.updateOne(
+    { _id: donation._id, embedding: { $exists: false } },
+    { $set: { embedding: vector } }
+  );
+  return vector;
+}
 
-  return Donation.aggregate([
+function buildDonationVectorSearchPipeline({ queryVector, index, limit, now }) {
+  return [
     {
       $vectorSearch: {
         index,
@@ -59,7 +57,27 @@ async function searchDonationVectors(need, now) {
     },
     { $addFields: { semanticScore: { $meta: "vectorSearchScore" } } },
     { $project: { embedding: 0 } }
-  ]);
+  ];
+}
+
+async function searchDonationVectors(need, now) {
+  const query = [
+    `Recipient needs ${need.quantity} ${need.unit} of ${need.foodType}.`,
+    need.pickupZone ? `Pickup area: ${need.pickupZone}.` : ""
+  ].filter(Boolean).join(" ");
+  const queryVector = await getEmbeddings().embedQuery(query);
+  const index = process.env.MONGODB_VECTOR_INDEX_NAME || "donations_vector_index";
+  const configuredLimit = Number(process.env.MATCHING_MAX_CANDIDATES);
+  const limit = Number.isInteger(configuredLimit) && configuredLimit > 0
+    ? Math.min(configuredLimit, 100)
+    : 50;
+
+  return Donation.aggregate(buildDonationVectorSearchPipeline({
+    queryVector,
+    index,
+    limit,
+    now
+  }));
 }
 
 async function searchMatchingProposals({ needId, recipientId, now = new Date() }) {
@@ -113,4 +131,9 @@ async function searchMatchingProposals({ needId, recipientId, now = new Date() }
   };
 }
 
-module.exports = { createDonationEmbedding, searchMatchingProposals };
+module.exports = {
+  createDonationEmbedding,
+  storeDonationEmbedding,
+  searchMatchingProposals,
+  buildDonationVectorSearchPipeline
+};

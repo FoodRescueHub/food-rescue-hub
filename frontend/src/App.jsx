@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useEffectEvent } from "react";
 import "./App.css";
 
 const API = "/api";
@@ -24,6 +24,9 @@ function App() {
 
   const [availableDonations, setAvailableDonations] = useState([]);
   const [reservations, setReservations] = useState([]);
+  const [matchingByNeed, setMatchingByNeed] = useState({});
+  const [matchingErrors, setMatchingErrors] = useState({});
+  const [matchingLoadingId, setMatchingLoadingId] = useState(null);
 
   // ==================== DONOR ====================
   const [donations, setDonations] = useState([]);
@@ -236,6 +239,82 @@ function App() {
       }
 
       setAvailableDonations(data.donations || data || []);
+    } catch (error) {
+      console.error(error);
+      alert("Backend connection failed.");
+    }
+  }
+
+  // Matching returns proposals only. Reservation is a separate, explicit user action.
+  async function findMatches(needId) {
+    setMatchingLoadingId(needId);
+    setMatchingErrors((previous) => ({ ...previous, [needId]: "" }));
+
+    try {
+      const response = await fetch(`${API}/matching/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ needId }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setMatchingErrors((previous) => ({
+          ...previous,
+          [needId]: data.message || "Could not find compatible donations.",
+        }));
+        return;
+      }
+
+      setMatchingByNeed((previous) => ({ ...previous, [needId]: data.data }));
+    } catch (error) {
+      console.error(error);
+      setMatchingErrors((previous) => ({
+        ...previous,
+        [needId]: "Backend connection failed while searching for matches.",
+      }));
+    } finally {
+      setMatchingLoadingId(null);
+    }
+  }
+
+  async function reserveMatchingProposal(need, proposal) {
+    const approved = window.confirm(
+      `Create a reservation for ${proposal.quantity} ${proposal.unit} of ${proposal.foodName}? The server will recheck availability.`
+    );
+    if (!approved) return;
+
+    try {
+      const response = await fetch(
+        `${API}/surplus/${proposal.donationId}/reservations`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ needId: need._id, quantity: proposal.quantity }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.message || "The proposal could not be reserved. Availability may have changed.");
+        return;
+      }
+
+      alert("Reservation created. Review and confirm it in My Reservations.");
+      setMatchingByNeed((previous) => {
+        const next = { ...previous };
+        delete next[need._id];
+        return next;
+      });
+      await loadMyNeeds();
+      await loadAvailableDonations();
+      await loadReservations();
     } catch (error) {
       console.error(error);
       alert("Backend connection failed.");
@@ -530,21 +609,32 @@ function App() {
     }
   }
 
-  // ==================== AUTO LOAD DATA ====================
-  useEffect(() => {
-    if (!token) {
-      return;
-    }
-
+  // This Effect Event reads the latest token and role while keeping the loaders
+  // outside the effect's reactive dependency list.
+  const loadDashboardData = useEffectEvent(() => {
     if (role === "RECIPIENT") {
-      loadMyNeeds();
-      loadAvailableDonations();
-      loadReservations();
+      void loadMyNeeds();
+      void loadAvailableDonations();
+      void loadReservations();
     }
 
     if (role === "DONOR") {
-      loadMyDonations();
+      void loadMyDonations();
     }
+  });
+
+  // ==================== AUTO LOAD DATA ====================
+  useEffect(() => {
+    if (!token) return;
+
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) loadDashboardData();
+    });
+
+    return () => {
+      active = false;
+    };
   }, [token, role]);
 
   // ==================== LOGIN SCREEN ====================
@@ -905,9 +995,64 @@ function App() {
             <p>Status: {need.status}</p>
 
             {need.status === "ACTIVE" && (
-              <button onClick={() => cancelNeed(need._id)}>
-                Cancel Need
-              </button>
+              <>
+                <button onClick={() => cancelNeed(need._id)}>
+                  Cancel Need
+                </button>
+                <button
+                  onClick={() => findMatches(need._id)}
+                  disabled={matchingLoadingId === need._id}
+                >
+                  {matchingLoadingId === need._id ? "Searching..." : "Find compatible donations"}
+                </button>
+              </>
+            )}
+
+            {matchingErrors[need._id] && (
+              <p role="alert" className="matching-error">{matchingErrors[need._id]}</p>
+            )}
+
+            {matchingByNeed[need._id] && (
+              <section className="matching-results" aria-label="Matching proposals">
+                <h3>Suggested matches for coordinator review</h3>
+                <p>
+                  Proposed: {matchingByNeed[need._id].proposedQuantity} {need.unit} of {need.quantity} {need.unit}.
+                  {matchingByNeed[need._id].fullyMatched
+                    ? " The need is fully covered by these proposals."
+                    : ` ${matchingByNeed[need._id].remainingQuantity} ${need.unit} remains unmatched.`}
+                </p>
+                <p>These are proposals only. No food is reserved until you review and explicitly select a proposal.</p>
+
+                {matchingByNeed[need._id].proposals.length === 0 ? (
+                  <p>No compatible proposals were found.</p>
+                ) : matchingByNeed[need._id].proposals.map((proposal) => (
+                  <article className="match-proposal" key={proposal.donationId}>
+                    <h4>{proposal.foodName}</h4>
+                    <p><strong>Proposed quantity:</strong> {proposal.quantity} {proposal.unit}</p>
+                    <p><strong>Pickup location:</strong> {proposal.pickupAddress}</p>
+                    <p>
+                      <strong>Pickup window:</strong>{" "}
+                      {new Date(proposal.pickupStart).toLocaleString()} – {new Date(proposal.pickupEnd).toLocaleString()}
+                    </p>
+                    <p><strong>Expiry:</strong> {new Date(proposal.expiryDate).toLocaleString()}</p>
+                    <p>Passed availability, quantity, unit, allergen, and pickup-window checks at search time.</p>
+                    <button onClick={() => reserveMatchingProposal(need, proposal)}>
+                      Review and reserve this proposal
+                    </button>
+                  </article>
+                ))}
+
+                {matchingByNeed[need._id].rejected.length > 0 && (
+                  <div className="matching-rejections">
+                    <h4>Flagged or incompatible listings</h4>
+                    {matchingByNeed[need._id].rejected.map((candidate) => (
+                      <p key={candidate.donationId}>
+                        Listing {candidate.donationId}: {candidate.reasons.map((reason) => reason.replaceAll("_", " ")).join(", ")}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
           </div>
         ))
