@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, useCallback } from "react";
 import "./App.css";
 
 const API = "/api";
@@ -37,43 +38,42 @@ function App() {
   const [description, setDescription] = useState("");
   const [pickupAddress, setPickupAddress] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
-  
-  
-async function generatePlan(needId) {
-  setLoadingPlanId(needId);
-  setPlanError("");
 
-  try {
-    const response = await fetch(`${API}/collection-agent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ needId }),
-    });
+  // ==================== COLLECTION AGENT ====================
+  async function generatePlan(needId) {
+    setLoadingPlanId(needId);
+    setPlanError("");
 
-    const data = await response.json();
+    try {
+      const response = await fetch(`${API}/collection-agent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ needId }),
+      });
 
-    if (!response.ok) {
-      throw new Error(
-        data.message || "Could not generate collection plan."
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Could not generate collection plan."
+        );
+      }
+
+      setCollectionPlans((previous) => ({
+        ...previous,
+        [needId]: data.data,
+      }));
+    } catch (error) {
+      setPlanError(
+        error.message || "Could not connect to the backend."
       );
+    } finally {
+      setLoadingPlanId(null);
     }
-
-    setCollectionPlans((previous) => ({
-      ...previous,
-      [needId]: data.data,
-    }));
-  } catch (error) {
-    setPlanError(
-      error.message || "Could not connect to the backend."
-    );
-  } finally {
-    setLoadingPlanId(null);
   }
-}
-
 
   // ==================== AUTH ====================
   async function handleAuth(e) {
@@ -84,16 +84,8 @@ async function generatePlan(needId) {
 
     const body =
       mode === "login"
-        ? {
-            email,
-            password,
-          }
-        : {
-            name,
-            email,
-            password,
-            role: "RECIPIENT",
-          };
+        ? { email, password }
+        : { name, email, password, role: "RECIPIENT" };
 
     try {
       const response = await fetch(`${API}${endpoint}`, {
@@ -197,7 +189,7 @@ async function generatePlan(needId) {
   }
 
   // ==================== RECIPIENT - LOAD MY NEEDS ====================
-  async function loadMyNeeds() {
+  const loadMyNeeds = useCallback(async () => {
     try {
       const response = await fetch(`${API}/needs`, {
         cache: "no-store",
@@ -219,10 +211,10 @@ async function generatePlan(needId) {
       console.error(error);
       alert("Backend connection failed.");
     }
-  }
+  }, [token]);
 
   // ==================== RECIPIENT - LOAD DONATIONS ====================
-  async function loadAvailableDonations() {
+  const loadAvailableDonations = useCallback(async () => {
     try {
       const response = await fetch(`${API}/donations`, {
         cache: "no-store",
@@ -244,7 +236,7 @@ async function generatePlan(needId) {
       console.error(error);
       alert("Backend connection failed.");
     }
-  }
+  }, [token]);
 
   // ==================== RECIPIENT - RESERVE ====================
   async function reserveDonation(donationId) {
@@ -303,7 +295,7 @@ async function generatePlan(needId) {
   }
 
   // ==================== RECIPIENT - LOAD RESERVATIONS ====================
-  async function loadReservations() {
+  const loadReservations = useCallback(async () => {
     try {
       const response = await fetch(`${API}/reservations`, {
         method: "GET",
@@ -323,13 +315,12 @@ async function generatePlan(needId) {
       }
 
       console.log("RESERVATIONS RESPONSE:", data);
-
       setReservations(data.reservations || data || []);
     } catch (error) {
       console.error(error);
       alert("Backend connection failed.");
     }
-  }
+  }, [token]);
 
   // ==================== RECIPIENT - CONFIRM RESERVATION ====================
   async function confirmReservation(id) {
@@ -352,7 +343,6 @@ async function generatePlan(needId) {
       }
 
       alert("Reservation confirmed successfully!");
-
       await loadReservations();
     } catch (error) {
       console.error(error);
@@ -366,9 +356,7 @@ async function generatePlan(needId) {
       "Are you sure you want to cancel this reservation?"
     );
 
-    if (!confirmCancel) {
-      return;
-    }
+    if (!confirmCancel) return;
 
     try {
       const response = await fetch(
@@ -446,7 +434,7 @@ async function generatePlan(needId) {
   }
 
   // ==================== DONOR - LOAD MY DONATIONS ====================
-  async function loadMyDonations() {
+  const loadMyDonations = useCallback(async () => {
     try {
       const response = await fetch(`${API}/donations/my`, {
         cache: "no-store",
@@ -468,7 +456,7 @@ async function generatePlan(needId) {
       console.error(error);
       alert("Backend connection failed.");
     }
-  }
+  }, [token]);
 
   // ==================== DONOR - CANCEL ====================
   async function cancelDonation(id) {
@@ -495,10 +483,7 @@ async function generatePlan(needId) {
       setDonations((prev) =>
         prev.map((donation) =>
           donation._id === id
-            ? {
-                ...donation,
-                status: "CANCELLED",
-              }
+            ? { ...donation, status: "CANCELLED" }
             : donation
         )
       );
@@ -509,21 +494,42 @@ async function generatePlan(needId) {
   }
 
   // ==================== AUTO LOAD DATA ====================
-  useEffect(() => {
-    if (!token) {
-      return;
-    }
+  // ==================== AUTO LOAD DATA ====================
+useEffect(() => {
+  if (!token) return;
 
+  let cancelled = false;
+
+  const loadData = async () => {
     if (role === "RECIPIENT") {
-      loadMyNeeds();
-      loadAvailableDonations();
-      loadReservations();
+      await Promise.all([
+        loadMyNeeds(),
+        loadAvailableDonations(),
+        loadReservations(),
+      ]);
+    } else if (role === "DONOR") {
+      await loadMyDonations();
     }
+  };
 
-    if (role === "DONOR") {
-      loadMyDonations();
+  const timeoutId = setTimeout(() => {
+    if (!cancelled) {
+      void loadData();
     }
-  }, [token, role]);
+  }, 0);
+
+  return () => {
+    cancelled = true;
+    clearTimeout(timeoutId);
+  };
+}, [
+  token,
+  role,
+  loadMyNeeds,
+  loadAvailableDonations,
+  loadReservations,
+  loadMyDonations,
+]);
 
   // ==================== LOGIN SCREEN ====================
   if (!token) {
@@ -532,9 +538,7 @@ async function generatePlan(needId) {
         <h1>Community Food Rescue</h1>
 
         <h2>
-          {mode === "login"
-            ? "Login"
-            : "Create Account"}
+          {mode === "login" ? "Login" : "Create Account"}
         </h2>
 
         <form onSubmit={handleAuth}>
@@ -543,9 +547,7 @@ async function generatePlan(needId) {
               type="text"
               placeholder="Name"
               value={name}
-              onChange={(e) =>
-                setName(e.target.value)
-              }
+              onChange={(e) => setName(e.target.value)}
               required
             />
           )}
@@ -554,9 +556,7 @@ async function generatePlan(needId) {
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e) =>
-              setEmail(e.target.value)
-            }
+            onChange={(e) => setEmail(e.target.value)}
             required
           />
 
@@ -564,26 +564,18 @@ async function generatePlan(needId) {
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
+            onChange={(e) => setPassword(e.target.value)}
             required
           />
 
           <button type="submit">
-            {mode === "login"
-              ? "Login"
-              : "Signup"}
+            {mode === "login" ? "Login" : "Signup"}
           </button>
         </form>
 
         <button
           onClick={() =>
-            setMode(
-              mode === "login"
-                ? "signup"
-                : "login"
-            )
+            setMode(mode === "login" ? "signup" : "login")
           }
         >
           {mode === "login"
@@ -600,9 +592,7 @@ async function generatePlan(needId) {
       <div className="container">
         <h1>Donor Dashboard</h1>
 
-        <button onClick={logout}>
-          Logout
-        </button>
+        <button onClick={logout}>Logout</button>
 
         <hr />
 
@@ -613,9 +603,7 @@ async function generatePlan(needId) {
             type="text"
             placeholder="Food name"
             value={foodName}
-            onChange={(e) =>
-              setFoodName(e.target.value)
-            }
+            onChange={(e) => setFoodName(e.target.value)}
             required
           />
 
@@ -623,18 +611,14 @@ async function generatePlan(needId) {
             type="number"
             placeholder="Quantity"
             value={donationQuantity}
-            onChange={(e) =>
-              setDonationQuantity(e.target.value)
-            }
+            onChange={(e) => setDonationQuantity(e.target.value)}
             required
             min="1"
           />
 
           <select
             value={donationUnit}
-            onChange={(e) =>
-              setDonationUnit(e.target.value)
-            }
+            onChange={(e) => setDonationUnit(e.target.value)}
           >
             <option value="kg">kg</option>
             <option value="litre">litre</option>
@@ -646,18 +630,14 @@ async function generatePlan(needId) {
             type="text"
             placeholder="Description"
             value={description}
-            onChange={(e) =>
-              setDescription(e.target.value)
-            }
+            onChange={(e) => setDescription(e.target.value)}
           />
 
           <input
             type="text"
             placeholder="Pickup address"
             value={pickupAddress}
-            onChange={(e) =>
-              setPickupAddress(e.target.value)
-            }
+            onChange={(e) => setPickupAddress(e.target.value)}
             required
           />
 
@@ -666,15 +646,11 @@ async function generatePlan(needId) {
           <input
             type="datetime-local"
             value={expiryDate}
-            onChange={(e) =>
-              setExpiryDate(e.target.value)
-            }
+            onChange={(e) => setExpiryDate(e.target.value)}
             required
           />
 
-          <button type="submit">
-            Create Donation
-          </button>
+          <button type="submit">Create Donation</button>
         </form>
 
         <hr />
@@ -689,48 +665,25 @@ async function generatePlan(needId) {
           <p>No donations found.</p>
         ) : (
           donations.map((donation) => (
-            <div
-              key={donation._id}
-              className="card"
-            >
-              <h3>
-                {donation.foodName}
-              </h3>
+            <div key={donation._id} className="card">
+              <h3>{donation.foodName}</h3>
 
               <p>
-                Quantity:{" "}
-                {donation.quantity}{" "}
-                {donation.unit}
+                Quantity: {donation.quantity} {donation.unit}
               </p>
 
-              <p>
-                Pickup:{" "}
-                {donation.pickupAddress}
-              </p>
-
-              <p>
-                Status:{" "}
-                {donation.status}
-              </p>
+              <p>Pickup: {donation.pickupAddress}</p>
+              <p>Status: {donation.status}</p>
 
               <p>
                 Expiry:{" "}
                 {donation.expiryDate
-                  ? new Date(
-                      donation.expiryDate
-                    ).toLocaleString()
+                  ? new Date(donation.expiryDate).toLocaleString()
                   : "N/A"}
               </p>
 
-              {donation.status ===
-                "AVAILABLE" && (
-                <button
-                  onClick={() =>
-                    cancelDonation(
-                      donation._id
-                    )
-                  }
-                >
+              {donation.status === "AVAILABLE" && (
+                <button onClick={() => cancelDonation(donation._id)}>
                   Cancel Donation
                 </button>
               )}
@@ -746,9 +699,7 @@ async function generatePlan(needId) {
     <div className="container">
       <h1>Recipient Dashboard</h1>
 
-      <button onClick={logout}>
-        Logout
-      </button>
+      <button onClick={logout}>Logout</button>
 
       <hr />
 
@@ -759,9 +710,7 @@ async function generatePlan(needId) {
           type="text"
           placeholder="Food type"
           value={foodType}
-          onChange={(e) =>
-            setFoodType(e.target.value)
-          }
+          onChange={(e) => setFoodType(e.target.value)}
           required
         />
 
@@ -769,18 +718,14 @@ async function generatePlan(needId) {
           type="number"
           placeholder="Quantity"
           value={needQuantity}
-          onChange={(e) =>
-            setNeedQuantity(e.target.value)
-          }
+          onChange={(e) => setNeedQuantity(e.target.value)}
           required
           min="1"
         />
 
         <select
           value={needUnit}
-          onChange={(e) =>
-            setNeedUnit(e.target.value)
-          }
+          onChange={(e) => setNeedUnit(e.target.value)}
         >
           <option value="kg">kg</option>
           <option value="litre">litre</option>
@@ -792,9 +737,7 @@ async function generatePlan(needId) {
           type="text"
           placeholder="Pickup zone"
           value={pickupZone}
-          onChange={(e) =>
-            setPickupZone(e.target.value)
-          }
+          onChange={(e) => setPickupZone(e.target.value)}
           required
         />
 
@@ -803,9 +746,7 @@ async function generatePlan(needId) {
         <input
           type="datetime-local"
           value={pickupStart}
-          onChange={(e) =>
-            setPickupStart(e.target.value)
-          }
+          onChange={(e) => setPickupStart(e.target.value)}
           required
         />
 
@@ -814,9 +755,7 @@ async function generatePlan(needId) {
         <input
           type="datetime-local"
           value={pickupEnd}
-          onChange={(e) =>
-            setPickupEnd(e.target.value)
-          }
+          onChange={(e) => setPickupEnd(e.target.value)}
           required
         />
 
@@ -824,18 +763,13 @@ async function generatePlan(needId) {
           type="text"
           placeholder="Allergens (optional)"
           value={allergens}
-          onChange={(e) =>
-            setAllergens(e.target.value)
-          }
+          onChange={(e) => setAllergens(e.target.value)}
         />
 
-        <button type="submit">
-          Create Food Need
-        </button>
+        <button type="submit">Create Food Need</button>
       </form>
 
       <hr />
-      
 
       <h2>My Food Needs</h2>
 
@@ -881,8 +815,7 @@ async function generatePlan(needId) {
 
                 <p>
                   Coordinator review required:{" "}
-                  {collectionPlans[need._id]
-                    .requiresCoordinatorReview
+                  {collectionPlans[need._id].requiresCoordinatorReview
                     ? "Yes"
                     : "No"}
                 </p>
@@ -911,8 +844,8 @@ async function generatePlan(needId) {
                     </p>
 
                     <p>
-                      Proposed quantity:{" "}
-                      {donation.allocatedQuantity} {donation.unit}
+                      Proposed quantity: {donation.allocatedQuantity}{" "}
+                      {donation.unit}
                     </p>
 
                     <p>Pickup: {donation.pickupAddress}</p>
@@ -930,10 +863,7 @@ async function generatePlan(needId) {
                   ?.remainingQuantity > 0 && (
                   <p>
                     Still needed:{" "}
-                    {
-                      collectionPlans[need._id].combinedPlan
-                        .remainingQuantity
-                    }{" "}
+                    {collectionPlans[need._id].combinedPlan.remainingQuantity}{" "}
                     {collectionPlans[need._id].requestedUnit}
                   </p>
                 )}
@@ -950,79 +880,47 @@ async function generatePlan(needId) {
         ))
       )}
 
-
-      
       <hr />
 
       <h2>Available Food Donations</h2>
 
-      <button
-        onClick={loadAvailableDonations}
-      >
+      <button onClick={loadAvailableDonations}>
         Refresh Available Donations
       </button>
 
       {availableDonations.length === 0 ? (
-        <p>
-          No available donations found.
-        </p>
+        <p>No available donations found.</p>
       ) : (
-        availableDonations.map(
-          (donation) => (
-            <div
-              key={donation._id}
-              className="card"
-            >
-              <h3>
-                {donation.foodName}
-              </h3>
+        availableDonations.map((donation) => (
+          <div key={donation._id} className="card">
+            <h3>{donation.foodName}</h3>
 
-              <p>
-                Quantity:{" "}
-                {donation.quantity}{" "}
-                {donation.unit}
-              </p>
+            <p>
+              Quantity: {donation.quantity} {donation.unit}
+            </p>
 
-              <p>
-                Description:{" "}
-                {donation.description ||
-                  "No description"}
-              </p>
+            <p>
+              Description: {donation.description || "No description"}
+            </p>
 
-              <p>
-                Pickup:{" "}
-                {donation.pickupAddress}
-              </p>
+            <p>Pickup: {donation.pickupAddress}</p>
 
-              <p>
-                Expiry:{" "}
-                {donation.expiryDate
-                  ? new Date(
-                      donation.expiryDate
-                    ).toLocaleString()
-                  : "N/A"}
-              </p>
+            <p>
+              Expiry:{" "}
+              {donation.expiryDate
+                ? new Date(donation.expiryDate).toLocaleString()
+                : "N/A"}
+            </p>
 
-              <p>
-                Status:{" "}
-                {donation.status}
-              </p>
+            <p>Status: {donation.status}</p>
 
-              {donation.status ===
-                "AVAILABLE" && (
-                <button
-                  onClick={() =>
-                    reserveDonation(
-                      donation._id
-                    )
-                  }
-                >
-                  Reserve Food
-                </button>
-              )}
-            </div>
-          )
-        )
+            {donation.status === "AVAILABLE" && (
+              <button onClick={() => reserveDonation(donation._id)}>
+                Reserve Food
+              </button>
+            )}
+          </div>
+        ))
       )}
 
       <hr />
@@ -1034,9 +932,7 @@ async function generatePlan(needId) {
       </button>
 
       {reservations.length === 0 ? (
-        <p>
-          No reservations found.
-        </p>
+        <p>No reservations found.</p>
       ) : (
         reservations.map((reservation) => {
           const reservationFood =
@@ -1045,35 +941,20 @@ async function generatePlan(needId) {
               ? reservation.surplusLotId.foodName
               : availableDonations.find(
                   (donation) =>
-                    donation._id ===
-                    reservation.surplusLotId
+                    donation._id === reservation.surplusLotId
                 )?.foodName;
 
           return (
-            <div
-              key={reservation._id}
-              className="card"
-            >
-              <h3>
-                Reservation
-              </h3>
+            <div key={reservation._id} className="card">
+              <h3>Reservation</h3>
 
-              <p>
-                Quantity:{" "}
-                {reservation.quantity}
-              </p>
-
-              <p>
-                Status:{" "}
-                {reservation.status}
-              </p>
+              <p>Quantity: {reservation.quantity}</p>
+              <p>Status: {reservation.status}</p>
 
               <p>
                 Expires:{" "}
                 {reservation.expiresAt
-                  ? new Date(
-                      reservation.expiresAt
-                    ).toLocaleString()
+                  ? new Date(reservation.expiresAt).toLocaleString()
                   : "N/A"}
               </p>
 
@@ -1084,43 +965,28 @@ async function generatePlan(needId) {
                   "Food donation"}
               </p>
 
-              {reservation.status ===
-                "HELD" && (
+              {reservation.status === "HELD" && (
                 <>
                   <button
-                    onClick={() =>
-                      confirmReservation(
-                        reservation._id
-                      )
-                    }
+                    onClick={() => confirmReservation(reservation._id)}
                   >
                     Confirm Reservation
                   </button>
 
                   <button
-                    onClick={() =>
-                      cancelReservation(
-                        reservation._id
-                      )
-                    }
+                    onClick={() => cancelReservation(reservation._id)}
                   >
                     Cancel Reservation
                   </button>
                 </>
               )}
 
-              {reservation.status ===
-                "CONFIRMED" && (
-                <p>
-                  Reservation confirmed.
-                </p>
+              {reservation.status === "CONFIRMED" && (
+                <p>Reservation confirmed.</p>
               )}
 
-              {reservation.status ===
-                "CANCELLED" && (
-                <p>
-                  Reservation cancelled.
-                </p>
+              {reservation.status === "CANCELLED" && (
+                <p>Reservation cancelled.</p>
               )}
             </div>
           );
