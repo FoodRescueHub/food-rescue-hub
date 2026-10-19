@@ -1,9 +1,7 @@
 const express = require("express");
 const collectionAgentRoutes = require("./routes/collectionAgent");
 const cors = require("cors");
-require("dotenv").config();
-
-console.log("JWT SECRET EXISTS:", Boolean(process.env.JWT_SECRET));
+require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/auth");
