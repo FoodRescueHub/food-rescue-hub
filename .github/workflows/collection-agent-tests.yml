@@ -32,7 +32,12 @@ jobs:
       - name: Check model files
         run: |
           pwd
-          find models -maxdepth 1 -type f
+          ls -lb models/
+          git ls-files models/
+
+      - name: Diagnose Donation model path
+        run: |
+          node -e "const fs=require('fs'); console.log('File exists:', fs.existsSync('models/Donation.js')); console.log('Files:', fs.readdirSync('models')); console.log('Resolved path:', require.resolve('./models/Donation.js'))"
 
       - name: Run Collection Agent tests
         run: npx --yes jest services/collectionAgentService.test.js --runInBand
