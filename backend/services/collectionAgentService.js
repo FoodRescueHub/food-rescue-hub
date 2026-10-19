@@ -24,9 +24,13 @@ function evaluateDonationMatch(need, donation) {
     unitsMatch &&
     Number(donation.quantity) >= Number(need.quantity);
 
-  const allergensNeedReview =
-    Array.isArray(need.allergenRequirements) &&
-    need.allergenRequirements.length > 0;
+  const allergenRequirements =
+    Array.isArray(need.allergenRequirements)
+      ? need.allergenRequirements
+      : [];
+
+  // Donation schema currently has no allergen declaration.
+  const allergensNeedReview = true;
 
   const reasons = [];
 
@@ -37,23 +41,24 @@ function evaluateDonationMatch(need, donation) {
   if (!unitsMatch) {
     reasons.push("Quantity units do not match.");
   } else if (!quantitySufficient) {
-    reasons.push("Donation quantity is insufficient.");
+    reasons.push("Donation alone does not cover the full need.");
   }
 
-  if (allergensNeedReview) {
-    reasons.push("Allergen requirements need human verification.");
+  if (allergenRequirements.length > 0) {
+    reasons.push("Need has allergen requirements.");
   }
 
-  if (foodMatches && unitsMatch && quantitySufficient) {
-    reasons.push("Food type, unit, and quantity match.");
-  }
+  reasons.push(
+    "Donation allergen information is unavailable; verify food safety."
+  );
 
   return {
+  
     recommended:
-      foodMatches &&
-      unitsMatch &&
-      quantitySufficient &&
-      !allergensNeedReview,
+    foodMatches &&
+    unitsMatch &&
+    quantitySufficient &&
+    !allergensNeedReview,
     needsReview:
       !foodMatches ||
       !unitsMatch ||
@@ -64,6 +69,65 @@ function evaluateDonationMatch(need, donation) {
     quantitySufficient,
     allergensNeedReview,
     reasons,
+  };
+}
+
+function buildCombinedPlan(need, donations) {
+  const requestedQuantity = Number(need.quantity);
+
+  const eligible = donations
+    .filter((donation) => {
+      const match = evaluateDonationMatch(need, donation);
+
+      return (
+        match.foodMatches &&
+        match.unitsMatch &&
+        Number(donation.quantity) > 0
+      );
+    })
+    .sort(
+      (a, b) =>
+        new Date(a.expiryDate) - new Date(b.expiryDate)
+    );
+
+  let remaining = requestedQuantity;
+  const selected = [];
+
+  for (const donation of eligible) {
+    if (remaining <= 0) break;
+
+    const available = Number(donation.quantity);
+    const allocated = Math.min(available, remaining);
+
+    selected.push({
+      donationId: donation._id,
+      donorId: donation.donor,
+      foodName: donation.foodName,
+      availableQuantity: available,
+      allocatedQuantity: allocated,
+      unit: donation.unit,
+      pickupAddress: donation.pickupAddress,
+      expiryDate: donation.expiryDate,
+      needsReview: true,
+      reviewReason:
+        "Confirm allergen information, food safety, and pickup feasibility.",
+    });
+
+    remaining -= allocated;
+  }
+
+  const allocatedQuantity =
+    requestedQuantity - Math.max(remaining, 0);
+
+  return {
+    requestedQuantity,
+    allocatedQuantity,
+    remainingQuantity: Math.max(remaining, 0),
+    unit: need.unit,
+    fulfilledByProposal: remaining <= 0,
+    selectedDonations: selected,
+    requiresCoordinatorReview: true,
+    inventoryChanged: false,
   };
 }
 
@@ -79,7 +143,7 @@ async function generateCollectionPlan(needId, recipientId) {
     throw error;
   }
 
-  const recipient = await User.findById(recipientId);
+  const recipient = await User.findById(recipientId).lean();
 
   if (!recipient || !recipient.organizationId) {
     const error = new Error(
@@ -124,14 +188,20 @@ async function generateCollectionPlan(needId, recipientId) {
       ...evaluateDonationMatch(need, donation),
     }))
     .sort((a, b) => {
-      if (a.recommended !== b.recommended) {
-        return Number(b.recommended) - Number(a.recommended);
+      if (a.foodMatches !== b.foodMatches) {
+        return Number(b.foodMatches) - Number(a.foodMatches);
+      }
+
+      if (a.unitsMatch !== b.unitsMatch) {
+        return Number(b.unitsMatch) - Number(a.unitsMatch);
       }
 
       return (
         new Date(a.expiryDate) - new Date(b.expiryDate)
       );
     });
+
+  const combinedPlan = buildCombinedPlan(need, donations);
 
   return {
     needId: need._id,
@@ -140,13 +210,15 @@ async function generateCollectionPlan(needId, recipientId) {
     requestedUnit: need.unit,
     recommendationCount: recommendations.length,
     recommendations,
+    combinedPlan,
     requiresCoordinatorReview: true,
     message:
-      "Recommendations are suggestions only. Verify food safety and pickup details before arranging collection.",
+      "This is a proposal only. Verify food safety, allergen information, pickup windows, travel, and volunteer capacity before coordinator approval. No inventory is reserved or changed.",
   };
 }
 
 module.exports = {
   generateCollectionPlan,
   evaluateDonationMatch,
+  buildCombinedPlan,
 };
