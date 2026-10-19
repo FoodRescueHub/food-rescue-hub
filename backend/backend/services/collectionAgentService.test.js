@@ -1,22 +1,10 @@
 
-jest.mock("../models/Donation", () => ({
-  find: jest.fn()
-}));
-
-jest.mock("../models/Need", () => ({
-  findOne: jest.fn()
-}));
-
-jest.mock("../models/User", () => ({
-  findById: jest.fn()
-}));
-
-const {
-  evaluateDonationMatch
-} = require("./collectionAgentService");
+const { evaluateDonationMatch } = jest.requireActual(
+  "./collectionAgentService"
+);
 
 describe("evaluateDonationMatch", () => {
-  test("recommends matching food with sufficient quantity and no allergen review", () => {
+  test("recommends matching food when quantity is sufficient", () => {
     const need = {
       foodType: "Rice",
       quantity: 10,
