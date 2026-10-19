@@ -156,24 +156,54 @@ function App() {
   }
 
   // ==================== RECIPIENT - LOAD MY NEEDS ====================
+  // Cancel an active food need
   async function loadMyNeeds() {
+  try {
+    const response = await fetch(`${API}/needs`, {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Cache-Control": "no-cache",
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.message || "Could not load food needs");
+      return;
+    }
+
+    setNeeds(data.needs || data || []);
+  } catch (error) {
+    console.error(error);
+    alert("Backend connection failed.");
+  }
+}
+  async function cancelNeed(id) {
+    if (!window.confirm("Are you sure you want to cancel this food need?")) {
+      return;
+    }
+
     try {
-      const response = await fetch(`${API}/needs`, {
-        cache: "no-store",
+      const response = await fetch(`${API}/needs/${id}`, {
+        method: "PATCH",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          "Cache-Control": "no-cache",
         },
+        body: JSON.stringify({ status: "CANCELLED" }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.message || "Could not load food needs");
+        alert(data.message || "Could not cancel food need");
         return;
       }
 
-      setNeeds(data.needs || data || []);
+      alert("Food need cancelled successfully.");
+      await loadMyNeeds();
     } catch (error) {
       console.error(error);
       alert("Backend connection failed.");
@@ -797,36 +827,26 @@ function App() {
 
       <h2>My Food Needs</h2>
 
-      {needs.length === 0 ? (
+     
+
+            {needs.length === 0 ? (
         <p>No food needs found.</p>
       ) : (
         needs.map((need) => (
-          <div
-            key={need._id}
-            className="card"
-          >
+          <div key={need._id} className="card">
             <h3>{need.foodType}</h3>
+            <p>Quantity: {need.quantity} {need.unit}</p>
+            <p>Pickup zone: {need.pickupZone}</p>
+            <p>Status: {need.status}</p>
 
-            <p>
-              Quantity:{" "}
-              {need.quantity}{" "}
-              {need.unit}
-            </p>
-
-            <p>
-              Pickup zone:{" "}
-              {need.pickupZone}
-            </p>
-
-            <p>
-              Status:{" "}
-              {need.status}
-            </p>
+            {need.status === "ACTIVE" && (
+              <button onClick={() => cancelNeed(need._id)}>
+                Cancel Need
+              </button>
+            )}
           </div>
         ))
       )}
-
-      <hr />
 
       <h2>Available Food Donations</h2>
 
