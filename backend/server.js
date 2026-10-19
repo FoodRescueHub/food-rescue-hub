@@ -1,3 +1,9 @@
+// ── DNS override (Node v26 / Windows SRV lookup workaround) ──────────────────
+// Node's default resolver refuses SRV queries on this network configuration.
+// Must be set before any require that triggers a network connection.
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
+
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
@@ -9,6 +15,8 @@ const donationRoutes = require("./routes/donations");
 const claimRoutes = require("./routes/claims");
 const needRoutes = require("./routes/needs");
 const reservationRoutes = require("./routes/reservations");
+const organizationRoutes = require("./routes/organizations");
+const membershipRoutes = require("./routes/memberships");
 
 const app = express();
 
@@ -45,6 +53,8 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/claims", claimRoutes);
 app.use("/api/needs", needRoutes);
 app.use("/api", reservationRoutes);
+app.use("/api/organizations", organizationRoutes);
+app.use("/api/memberships", membershipRoutes);
 
 // Root route
 app.get("/", (req, res) => {

@@ -4,12 +4,13 @@ const mongoose = require("mongoose");
 
 const Need = require("../models/Need");
 const User = require("../models/User");
+const Membership = require("../models/Membership");
 const authenticateToken = require("../middleware/authMiddleware");
 const authorizeRoles = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
-// Get the logged-in recipient's organization.
+// Resolve the recipient's organization only when their membership is active.
 async function getRecipient(req) {
   if (!mongoose.isValidObjectId(req.user.id)) {
     return null;
@@ -17,8 +18,27 @@ async function getRecipient(req) {
 
   const user = await User.findById(req.user.id);
 
-  if (!user || !user.organizationId) {
+  if (!user) {
     return null;
+  }
+
+  // A stored organization association is usable only with an active membership.
+  const membership = await Membership.findOne({
+    userId: user._id,
+    ...(user.organizationId ? { organizationId: user.organizationId } : {}),
+    status: "ACTIVE"
+  });
+
+  if (!membership) {
+    return null;
+  }
+
+  if (!user.organizationId) {
+    await User.updateOne(
+      { _id: user._id, organizationId: null },
+      { $set: { organizationId: membership.organizationId } }
+    );
+    user.organizationId = membership.organizationId;
   }
 
   return user;
