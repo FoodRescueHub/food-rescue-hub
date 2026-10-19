@@ -1,61 +1,101 @@
 
+jest.mock("../models/Donation", () => ({
+  find: jest.fn()
+}));
+
+jest.mock("../models/Need", () => ({
+  findOne: jest.fn()
+}));
+
+jest.mock("../models/User", () => ({
+  findById: jest.fn()
+}));
+
 const {
   evaluateDonationMatch
 } = require("./collectionAgentService");
 
 describe("evaluateDonationMatch", () => {
-  const need = {
-    foodType: "Rice",
-    quantity: 10,
-    unit: "kg",
-    allergenRequirements: []
-  };
+  test("recommends matching food with sufficient quantity and no allergen review", () => {
+    const need = {
+      foodType: "Rice",
+      quantity: 10,
+      unit: "kg",
+      allergenRequirements: []
+    };
 
-  test("recommends sufficient matching donations", () => {
-    const result = evaluateDonationMatch(need, {
+    const donation = {
       foodName: "Rice",
       quantity: 15,
       unit: "kg"
-    });
+    };
+
+    const result = evaluateDonationMatch(need, donation);
 
     expect(result.recommended).toBe(true);
+    expect(result.needsReview).toBe(false);
     expect(result.quantitySufficient).toBe(true);
   });
 
-  test("rejects insufficient donations", () => {
-    const result = evaluateDonationMatch(need, {
+  test("does not recommend a donation with insufficient quantity", () => {
+    const need = {
+      foodType: "Rice",
+      quantity: 10,
+      unit: "kg",
+      allergenRequirements: []
+    };
+
+    const donation = {
       foodName: "Rice",
       quantity: 5,
       unit: "kg"
-    });
+    };
+
+    const result = evaluateDonationMatch(need, donation);
 
     expect(result.recommended).toBe(false);
     expect(result.quantitySufficient).toBe(false);
-  });
-
-  test("flags mismatched units for review", () => {
-    const result = evaluateDonationMatch(need, {
-      foodName: "Rice",
-      quantity: 15,
-      unit: "bags"
-    });
-
-    expect(result.recommended).toBe(false);
-    expect(result.unitsMatch).toBe(false);
     expect(result.needsReview).toBe(true);
   });
 
-  test("requires review for allergen requirements", () => {
-    const result = evaluateDonationMatch(
-      { ...need, allergenRequirements: ["peanuts"] },
-      {
-        foodName: "Rice",
-        quantity: 15,
-        unit: "kg"
-      }
-    );
+  test("requires review when allergen requirements are present", () => {
+    const need = {
+      foodType: "Rice",
+      quantity: 10,
+      unit: "kg",
+      allergenRequirements: ["peanuts"]
+    };
+
+    const donation = {
+      foodName: "Rice",
+      quantity: 15,
+      unit: "kg"
+    };
+
+    const result = evaluateDonationMatch(need, donation);
 
     expect(result.recommended).toBe(false);
     expect(result.allergensNeedReview).toBe(true);
+    expect(result.needsReview).toBe(true);
+  });
+
+  test("does not recommend donations with mismatched units", () => {
+    const need = {
+      foodType: "Rice",
+      quantity: 10,
+      unit: "kg",
+      allergenRequirements: []
+    };
+
+    const donation = {
+      foodName: "Rice",
+      quantity: 15,
+      unit: "litres"
+    };
+
+    const result = evaluateDonationMatch(need, donation);
+
+    expect(result.recommended).toBe(false);
+    expect(result.unitsMatch).toBe(false);
   });
 });
