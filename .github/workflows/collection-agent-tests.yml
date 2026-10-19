@@ -37,7 +37,11 @@ jobs:
 
       - name: Diagnose Donation model path
         run: |
-          node -e "const fs=require('fs'); console.log('File exists:', fs.existsSync('models/Donation.js')); console.log('Files:', fs.readdirSync('models')); console.log('Resolved path:', require.resolve('./models/Donation.js'))"
+          node -e "console.log('Resolved:', require.resolve('./models/Donation.js'))"
+          node -e "console.log('Mongoose:', require.resolve('mongoose'))"
+
+      - name: Check Jest configuration
+        run: npx --yes jest --showConfig
 
       - name: Run Collection Agent tests
-        run: npx --yes jest services/collectionAgentService.test.js --runInBand
+        run: npx --yes jest services/collectionAgentService.test.js --runInBand --no-cache
