@@ -1,6 +1,5 @@
 
 const Need = require("../models/Need");
-const Donation = require("../models/Donation");
 const {
   readNeeds,
   findAvailableLots,
@@ -14,9 +13,7 @@ function normalize(value) {
 function getAllergenWarnings(donation) {
   return [
     "Allergen information is UNKNOWN. Verify ingredients and cross-contact risks before approval.",
-    ...(donation.description
-      ? []
-      : ["Donation description is missing."]),
+    ...(donation.description ? [] : ["Donation description is missing."]),
   ];
 }
 
@@ -30,43 +27,77 @@ function evaluateDonationMatch(need, donation) {
   const needUnit = normalize(need.unit);
   const donationUnit = normalize(donation.unit);
 
-  if (!needFood || !donationFood || needFood !== donationFood) {
+  const foodMatches =
+    Boolean(needFood) &&
+    Boolean(donationFood) &&
+    needFood === donationFood;
+
+  const unitsMatch =
+    Boolean(needUnit) &&
+    Boolean(donationUnit) &&
+    needUnit === donationUnit;
+
+  const requiredQuantity = Number(need.quantity);
+  const quantity = Number(donation.quantity);
+
+  const quantityValid =
+    Number.isFinite(quantity) && quantity > 0;
+
+  const quantitySufficient =
+    quantityValid &&
+    Number.isFinite(requiredQuantity) &&
+    requiredQuantity > 0 &&
+    quantity >= requiredQuantity;
+
+  const expiryDate = new Date(donation.expiryDate);
+  const expiryValid =
+    Boolean(donation.expiryDate) &&
+    !Number.isNaN(expiryDate.getTime()) &&
+    expiryDate > new Date();
+
+  if (!foodMatches) {
     warnings.push("Food type does not exactly match the need.");
   }
 
-  if (needUnit !== donationUnit) {
-    warnings.push("Units do not match; automatic quantity conversion is unavailable.");
+  if (!unitsMatch) {
+    warnings.push(
+      "Units do not match; automatic quantity conversion is unavailable."
+    );
   }
 
-  const quantity = Number(donation.quantity);
-  const expiryDate = new Date(donation.expiryDate);
-
-  if (!Number.isFinite(quantity) || quantity <= 0) {
+  if (!quantityValid) {
     warnings.push("Donation quantity is invalid.");
   }
 
-  if (
-    !donation.expiryDate ||
-    Number.isNaN(expiryDate.getTime()) ||
-    expiryDate <= new Date()
-  ) {
-    warnings.push("Donation is expired or has no valid expiry date.");
+  if (!expiryValid) {
+    warnings.push(
+      "Donation is expired or has no valid expiry date."
+    );
   }
 
   warnings.push(...getAllergenWarnings(donation));
 
+  // Allergen details are not stored in the current model.
+  // Therefore, every proposal requires coordinator review.
+  const allergensNeedReview = true;
+
+  const recommended =
+    foodMatches &&
+    unitsMatch &&
+    quantitySufficient &&
+    expiryValid &&
+    !allergensNeedReview;
+
   return {
-    matches:
-      warnings.every(
-        (warning) =>
-          !warning.startsWith("Food type") &&
-          !warning.startsWith("Units do not match") &&
-          !warning.startsWith("Donation quantity") &&
-          !warning.startsWith("Donation is expired")
-      ),
-    foodTypeMatch: Boolean(needFood && donationFood && needFood === donationFood),
-    unitMatch: Boolean(needUnit && donationUnit && needUnit === donationUnit),
-    quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 0,
+    matches: foodMatches && unitsMatch && quantityValid && expiryValid,
+    foodMatches,
+    unitsMatch,
+    quantitySufficient,
+    allergensNeedReview,
+    recommended,
+    foodTypeMatch: foodMatches,
+    unitMatch: unitsMatch,
+    quantity: quantityValid ? quantity : 0,
     warnings,
     allergenStatus: "UNKNOWN",
     requiresCoordinatorReview: true,
@@ -77,15 +108,21 @@ function buildCombinedPlan(need, donations) {
   const requestedQuantity = Number(need.quantity);
   const requestedUnit = normalize(need.unit);
 
-  if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) {
+  if (
+    !Number.isFinite(requestedQuantity) ||
+    requestedQuantity <= 0
+  ) {
     return {
       selectedDonations: [],
       requestedQuantity: need.quantity,
       requestedUnit: need.unit,
       allocatedQuantity: 0,
       remainingQuantity: need.quantity,
+      fulfilledByProposal: false,
       warnings: ["Requested need quantity is invalid."],
       requiresCoordinatorReview: true,
+      inventoryChanged: false,
+      proposalOnly: true,
     };
   }
 
@@ -94,7 +131,8 @@ function buildCombinedPlan(need, donations) {
   const warnings = [];
 
   const sortedDonations = [...donations].sort(
-    (a, b) => new Date(a.expiryDate) - new Date(b.expiryDate)
+    (a, b) =>
+      new Date(a.expiryDate) - new Date(b.expiryDate)
   );
 
   for (const donation of sortedDonations) {
@@ -102,16 +140,23 @@ function buildCombinedPlan(need, donations) {
 
     const match = evaluateDonationMatch(need, donation);
 
-    if (!match.foodTypeMatch || !match.unitMatch || match.quantity <= 0) {
+    if (
+      !match.foodMatches ||
+      !match.unitsMatch ||
+      match.quantity <= 0
+    ) {
       warnings.push(
         `${donation.foodName || "Donation"} was not selected because its food type, unit, or quantity needs review.`
       );
       continue;
     }
 
+    const expiryDate = new Date(donation.expiryDate);
+
     if (
       !donation.expiryDate ||
-      new Date(donation.expiryDate) <= new Date()
+      Number.isNaN(expiryDate.getTime()) ||
+      expiryDate <= new Date()
     ) {
       warnings.push(
         `${donation.foodName || "Donation"} was not selected because its expiry date is invalid or past.`
@@ -119,10 +164,15 @@ function buildCombinedPlan(need, donations) {
       continue;
     }
 
-    const allocatedQuantity = Math.min(match.quantity, remaining);
+    const allocatedQuantity = Math.min(
+      match.quantity,
+      remaining
+    );
 
     selectedDonations.push({
-      donationId: String(donation._id),
+      donationId: donation._id
+        ? String(donation._id)
+        : undefined,
       foodName: donation.foodName,
       availableQuantity: match.quantity,
       allocatedQuantity,
@@ -153,6 +203,7 @@ function buildCombinedPlan(need, donations) {
     selectedDonations,
     allocatedQuantity: requestedQuantity - remaining,
     remainingQuantity: remaining,
+    fulfilledByProposal: remaining === 0,
     warnings,
     requiresCoordinatorReview: true,
     inventoryChanged: false,
@@ -171,21 +222,27 @@ async function generateCollectionPlan(needId, organizationId) {
     organizationId &&
     String(need.organizationId) !== String(organizationId)
   ) {
-    throw new Error("You are not authorized to access this food need.");
+    throw new Error(
+      "You are not authorized to access this food need."
+    );
   }
 
   if (need.status !== "ACTIVE") {
-    throw new Error("Only active food needs can have a collection plan.");
+    throw new Error(
+      "Only active food needs can have a collection plan."
+    );
   }
 
   const now = new Date();
+
   const pickupStart =
     need.pickupStart && new Date(need.pickupStart) > now
       ? new Date(need.pickupStart)
       : now;
 
   const pickupEnd =
-    need.pickupEnd && new Date(need.pickupEnd) > pickupStart
+    need.pickupEnd &&
+    new Date(need.pickupEnd) > pickupStart
       ? new Date(need.pickupEnd)
       : new Date(pickupStart.getTime() + 60 * 60 * 1000);
 
