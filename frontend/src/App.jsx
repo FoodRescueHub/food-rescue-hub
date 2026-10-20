@@ -1,6 +1,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import "./App.css";
+import OrganizationSetup from "./components/OrganizationSetup.jsx";
+import OrganizationDashboard from "./components/OrganizationDashboard.jsx";
 import VolunteerDashboard from "./VolunteerDashboard";
 import CoordinatorDashboard from "./CoordinatorDashboard";
 
@@ -15,9 +17,22 @@ function App() {
   const [role, setRole] = useState(localStorage.getItem("role"));
   const [mode, setMode] = useState("login");
 
+  // ==================== ORGANIZATION ====================
+  // orgId / orgRole are persisted in localStorage so page refresh keeps state.
+  const [orgId,   setOrgId]   = useState(localStorage.getItem("orgId")   || null);
+  const [orgRole, setOrgRole] = useState(localStorage.getItem("orgRole") || null);
+  // null  = not yet checked
+  // false = checked, no active membership
+  const [orgChecked, setOrgChecked] = useState(orgId !== null);
+
+  // "dashboard" = show role-specific content (needs / donations)
+  // "org"       = show organization screens
+  const [view, setView] = useState("dashboard");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [signupRole, setSignupRole] = useState("RECIPIENT");
 
   // ==================== RECIPIENT ====================
   const [needs, setNeeds] = useState([]);
@@ -40,6 +55,32 @@ function App() {
   const [description, setDescription] = useState("");
   const [pickupAddress, setPickupAddress] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+
+  // ==================== ORGANIZATION CHECK ====================
+  // After a token appears, fetch the user's active org memberships once.
+  useEffect(() => {
+    if (!token || orgChecked) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`${API}/organizations/my`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) { setOrgChecked(true); return; }
+        const data = await res.json();
+        if (data.organizations && data.organizations.length > 0) {
+          const first = data.organizations[0];
+          const rid   = first._id;
+          const rrole = first.membershipRole || "MEMBER";
+          setOrgId(rid);
+          setOrgRole(rrole);
+          localStorage.setItem("orgId",   rid);
+          localStorage.setItem("orgRole", rrole);
+        }
+      } catch { /* silent — org flow is additive */ }
+      finally  { setOrgChecked(true); }
+    })();
+  }, [token, orgChecked]);
 
   // ==================== COLLECTION AGENT ====================
   async function generatePlan(needId) {
@@ -86,8 +127,16 @@ function App() {
 
     const body =
       mode === "login"
-        ? { email, password }
-        : { name, email, password, role: "RECIPIENT" };
+        ? {
+            email,
+            password,
+          }
+        : {
+            name,
+            email,
+            password,
+            role: signupRole,
+          };
 
     try {
       const response = await fetch(`${API}${endpoint}`, {
@@ -108,6 +157,7 @@ function App() {
       if (mode === "signup") {
         alert("Signup successful. Please login.");
         setMode("login");
+        setSignupRole("RECIPIENT");
         return;
       }
 
@@ -116,6 +166,13 @@ function App() {
 
       setToken(data.token);
       setRole(data.user.role);
+
+      // Reset org check so the useEffect fires for the newly logged-in user.
+      setOrgId(null);
+      setOrgRole(null);
+      setOrgChecked(false);
+      localStorage.removeItem("orgId");
+      localStorage.removeItem("orgRole");
 
       setEmail("");
       setPassword("");
@@ -129,9 +186,15 @@ function App() {
   function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
+    localStorage.removeItem("orgId");
+    localStorage.removeItem("orgRole");
 
     setToken(null);
     setRole(null);
+    setOrgId(null);
+    setOrgRole(null);
+    setOrgChecked(false);
+    setView("dashboard");
   }
 
   // ==================== RECIPIENT - CREATE NEED ====================
@@ -162,7 +225,10 @@ function App() {
           pickupZone,
           pickupStart,
           pickupEnd,
-          allergens,
+          allergenRequirements: allergens
+            .split(",")
+            .map((allergen) => allergen.trim())
+            .filter(Boolean),
         }),
       });
 
@@ -586,6 +652,19 @@ useEffect(() => {
             />
           )}
 
+          {mode === "signup" && (
+            <>
+              <label>I am registering as a</label>
+              <select
+                value={signupRole}
+                onChange={(e) => setSignupRole(e.target.value)}
+              >
+                <option value="RECIPIENT">Recipient (food bank / charity)</option>
+                <option value="DONOR">Donor (business / individual)</option>
+              </select>
+            </>
+          )}
+
           <input
             type="email"
             placeholder="Email"
@@ -626,9 +705,50 @@ useEffect(() => {
       <div className="container">
         <h1>Donor Dashboard</h1>
 
-        <button onClick={logout}>Logout</button>
+        {/* ── Top navigation ── */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+          <button
+            onClick={() => setView("dashboard")}
+            style={{ background: view === "dashboard" ? "#10563d" : "#176b4d" }}
+          >
+            Donations
+          </button>
+          <button
+            onClick={() => setView("org")}
+            style={{ background: view === "org" ? "#10563d" : "#176b4d" }}
+          >
+            Organization
+          </button>
+          <button onClick={logout} style={{ background: "#6c757d", marginLeft: "auto" }}>
+            Logout
+          </button>
+        </div>
 
-        <hr />
+        {/* ── Organization view ── */}
+        {view === "org" && (
+          <>
+            {!orgChecked && <p>Loading organization…</p>}
+            {orgChecked && !orgId && (
+              <OrganizationSetup
+                token={token}
+                onComplete={(org) => {
+                  setOrgId(org._id);
+                  setOrgRole("ADMIN");
+                  localStorage.setItem("orgId",   org._id);
+                  localStorage.setItem("orgRole", "ADMIN");
+                }}
+              />
+            )}
+            {orgChecked && orgId && (
+              <OrganizationDashboard token={token} orgId={orgId} memberRole={orgRole} />
+            )}
+          </>
+        )}
+
+        {/* ── Donations view ── */}
+        {view === "dashboard" && (
+          <>
+            <hr />
 
         <h2>Create Food Donation</h2>
 
@@ -724,6 +844,8 @@ useEffect(() => {
             </div>
           ))
         )}
+          </>
+        )}
       </div>
     );
   }
@@ -755,9 +877,50 @@ useEffect(() => {
     <div className="container">
       <h1>Recipient Dashboard</h1>
 
-      <button onClick={logout}>Logout</button>
+      {/* ── Top navigation ── */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+        <button
+          onClick={() => setView("dashboard")}
+          style={{ background: view === "dashboard" ? "#10563d" : "#176b4d" }}
+        >
+          Food Needs
+        </button>
+        <button
+          onClick={() => setView("org")}
+          style={{ background: view === "org" ? "#10563d" : "#176b4d" }}
+        >
+          Organization
+        </button>
+        <button onClick={logout} style={{ background: "#6c757d", marginLeft: "auto" }}>
+          Logout
+        </button>
+      </div>
 
-      <hr />
+      {/* ── Organization view ── */}
+      {view === "org" && (
+        <>
+          {!orgChecked && <p>Loading organization…</p>}
+          {orgChecked && !orgId && (
+            <OrganizationSetup
+              token={token}
+              onComplete={(org) => {
+                setOrgId(org._id);
+                setOrgRole("ADMIN");
+                localStorage.setItem("orgId",   org._id);
+                localStorage.setItem("orgRole", "ADMIN");
+              }}
+            />
+          )}
+          {orgChecked && orgId && (
+            <OrganizationDashboard token={token} orgId={orgId} memberRole={orgRole} />
+          )}
+        </>
+      )}
+
+      {/* ── Food needs / donations / reservations view ── */}
+      {view === "dashboard" && (
+        <>
+          <hr />
 
       <h2>Create Food Need</h2>
 
@@ -817,7 +980,7 @@ useEffect(() => {
 
         <input
           type="text"
-          placeholder="Allergens (optional)"
+          placeholder="Allergens, comma-separated (optional)"
           value={allergens}
           onChange={(e) => setAllergens(e.target.value)}
         />
@@ -1058,6 +1221,8 @@ useEffect(() => {
             </div>
           );
         })
+      )}
+        </>
       )}
     </div>
   );
