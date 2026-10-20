@@ -1,6 +1,28 @@
 {
+  "name": "community-food-rescue",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test tests/surplus.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
   "dependencies": {
+    "cors": "^2.8.6",
     "dotenv": "^18.0.8",
-    "jsonwebtoken": "^9.0.3"
+    "express": "^5.3.0",
+    "mongoose": "^9.11.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.3.0",
+    "supertest": "^7.3.1"
   }
 }
