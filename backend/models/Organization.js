@@ -43,7 +43,7 @@ const organizationSchema = new mongoose.Schema(
 
     verificationStatus: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED"],
+      enum: ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"],
       default: "PENDING"
     },
 

@@ -5,6 +5,7 @@ const dns = require("dns");
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const express = require("express");
+const collectionAgentRoutes = require("./routes/collectionAgent");
 const cors = require("cors");
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 
@@ -15,10 +16,15 @@ const donationRoutes = require("./routes/donations");
 const claimRoutes = require("./routes/claims");
 const needRoutes = require("./routes/needs");
 const reservationRoutes = require("./routes/reservations");
+const pickupRoutes = require("./routes/pickups");
+const handoverRoutes = require("./routes/handovers");
+const policyRoutes = require("./routes/policies");
 const organizationRoutes = require("./routes/organizations");
 const membershipRoutes = require("./routes/memberships");
 
 const app = express();
+
+app.use(express.json());
 
 // CORS configuration
 app.use(
@@ -28,6 +34,8 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+app.use("/api/collection-agent", collectionAgentRoutes);
 
 // JSON body parser
 app.use(express.json());
@@ -46,6 +54,13 @@ app.get("/api/reservations/test", (req, res) => {
   });
 });
 
+// Pickup test route
+app.get("/api/pickups/test", (req, res) => {
+  res.json({
+    message: "Pickup route test working!",
+  });
+});
+
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api", protectedRoutes);
@@ -53,6 +68,9 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/claims", claimRoutes);
 app.use("/api/needs", needRoutes);
 app.use("/api", reservationRoutes);
+app.use("/api/pickups", pickupRoutes);
+app.use("/api", handoverRoutes);
+app.use("/api", policyRoutes);
 app.use("/api/organizations", organizationRoutes);
 app.use("/api/memberships", membershipRoutes);
 
